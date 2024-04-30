@@ -14,7 +14,7 @@ O programa deve ser capaz de:
 - [x] Listar os arquivos no TPDV.
 - [ ] Extrair um arquivo (ou todos) do TPDV.
 - [ ] Calcular o hash de um arquivo no TPDV.
-- [ ] Alterar a password do TPDV.
+- [x] Alterar a password do TPDV.
 - [ ] Clonar o TPDV para outro SGX enclave.
 
 ## Implementação
@@ -55,6 +55,7 @@ O programa é dividido em **dois tipos** de funções:
   - `create_tpdv`
   - `add_asset`
   - `list_assets`
+  - `change_password`
 
 #### `create_tpdv`
 
@@ -89,6 +90,16 @@ int list_assets(const uint8_t *filename, const uint8_t *password);
 
 E devolve `0` em caso de sucesso e `1` em caso de erro.
 
+#### `change_password`
+
+Esta função é responsável por alterar a password do TPDV. A função dá *unseal* o array de ficheiros, altera a password e *seal* o array.
+
+A função tem o seguinte header:
+```c
+int change_password(const uint8_t *filename, const uint8_t *old_password, const uint8_t *new_password);
+```
+
+E devolve `0` em caso de sucesso e `1` em caso de erro.
 
 ### Fluxo de execução da aplicação
 

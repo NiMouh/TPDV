@@ -655,6 +655,101 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
   return 0;
 }
 
+int change_password(const uint8_t *filename, const uint8_t *old_password, const uint8_t *new_password)
+{
+  if (initialize_enclave1() < 0)
+  {
+    fprintf(stderr, "Error initializing enclave\n");
+    return -1;
+  }
+
+  uint32_t sealed_size = get_file_size(filename);
+  if (sealed_size == -1)
+  {
+    fprintf(stderr, "The vault file does not exist\n");
+    return 1;
+  }
+
+  uint8_t *sealed_data = (uint8_t *)malloc(sealed_size);
+  if (sealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the sealed data\n");
+    return 1;
+  }
+
+  if (!read_file_to_buf((char *)filename, sealed_data, sealed_size))
+  {
+    fprintf(stderr, "Failed to read the vault file\n");
+    free(sealed_data);
+    return 1;
+  }
+
+  uint32_t unsealed_size = 0;
+  sgx_status_t status, ecall_status;
+  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_unsealed_data_size");
+    free(sealed_data);
+    return 1;
+  }
+
+  // Unseal the vault
+  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+  if (unsealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
+    free(sealed_data);
+    return 1;
+  }
+
+  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "unseal");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Check if the old password is correct
+  if (strcmp((char *)old_password, (char *)unsealed_data + FILENAME_SIZE) != 0)
+  {
+    fprintf(stderr, "The old password is incorrect\n");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Update the password
+  memcpy(unsealed_data + FILENAME_SIZE, new_password, PASSWORD_SIZE);
+
+  // Seal the new vault
+  if ((status = seal(global_eid1, &ecall_status, unsealed_data, unsealed_size, (sgx_sealed_data_t *)sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "seal");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Save the sealed new vault to the file
+  if (!write_buf_to_file(filename, sealed_data, sealed_size, 0))
+  {
+    fprintf(stderr, "Failed to write the sealed new vault to the file\n");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Destroy the enclave
+  if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "sgx_destroy_enclave");
+    return 1;
+  }
+
+  return 0;
+}
+
 int show_options_menu(void)
 {
   int option = 0;
@@ -891,13 +986,97 @@ int SGX_CDECL main(int argc, char *argv[])
     case 5: // TODO: Check integrity of vault
       printf("Check integrity of vault\n");
       break;
-    case 6: // TODO: Password change
-      printf("Password change\n");
+    case 6: // Password change
+    {
+      uint8_t filename[FILENAME_SIZE] = {0}, old_password[PASSWORD_SIZE] = {0}, confirm_old_password[PASSWORD_SIZE] = {0}, new_password[PASSWORD_SIZE] = {0};
+
+      printf("Enter the filename: ");
+      if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (filename[i] == '\n')
+        {
+          filename[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Enter the old password: ");
+      if (fgets((char *)old_password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (old_password[i] == '\n')
+        {
+          old_password[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Confirm the old password: ");
+      if (fgets((char *)confirm_old_password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (confirm_old_password[i] == '\n')
+        {
+          confirm_old_password[i] = '\0';
+          break;
+        }
+      }
+
+      if (strcmp((char *)old_password, (char *)confirm_old_password) != 0)
+      {
+        printf("Error: The old passwords do not match.\n");
+        break;
+      }
+
+      printf("Enter the new password: ");
+      if (fgets((char *)new_password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (new_password[i] == '\n')
+        {
+          new_password[i] = '\0';
+          break;
+        }
+      }
+
+      printf("\033[H\033[J"); // Clear the screen
+      if (change_password(filename, old_password, new_password) != 0)
+      {
+        printf("Error: Failed to change the password.\n");
+      }
+
+      printf("Password changed successfully.\n\n");
+
+      printf("Press ENTER to continue...");
+      getchar();
+
       break;
+    }
     case 7: // TODO: Clone vault
       printf("Clone vault\n");
       break;
-    case 8:
+    case 8: // Exit
       printf("\033[H\033[J"); // Clear the screen
       printf("Exiting...\n");
       break;
