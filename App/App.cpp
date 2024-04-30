@@ -660,26 +660,31 @@ int show_options_menu(void)
   int option = 0;
 
   printf("\033[H\033[J"); // Clear the screen
-
-  printf("****************************************\n");
-  printf("*     Tamper-proof Digital Vault     *\n");
-  printf("****************************************\n");
-  printf("1. Create a new vault\n");
-  printf("2. Add asset to vault\n");
-  printf("3. List all assets in vault\n");
-  printf("4. Retrieve asset from vault\n");
-  printf("5. Check integrity of vault\n");
-  printf("6. Password change\n");
-  printf("7. Clone vault\n");
-  printf("8. Exit\n\n");
+  printf("                                                                                        (\n");
+  printf("  *   )                                                                        (        )\\ )              )                                   (       )  \n");
+  printf("` )  /(      )      )               (    (                   (                 )\\ )    (()/     )   ( /(      )     (   (       )     (    )\\   ( /(  \n");
+  printf(" ( )(_))  ( /(     (      `  )     ))\\   )(    ___   `  )    )(     (     (   (()/     /(_))   ( /(   )\\())  ( /(     )\\  )\\   ( /(    ))\\  ((_)  )\\()) \n");
+  printf("(_(_())   )(_))    )\\  '  /(/(    /((_) (()\\  |___|  /(/(   (()/    )\\    )\\   /(_))   (_))_    )(_)) (_))/   )(_))   ((_)((_)  )(_))  /((_)  _   (_))/  \n");
+  printf("|_   _|  ((_)_   _((_))  ((_)_\\  (_))    ((_)       ((_)_\\   ((_)  ((_)  ((_) (_) _|    |   \\  ((_)_  | |_   ((_)_    \\ \\ / /  ((_)_  (_))(  | |  | |_   \n");
+  printf("  | |    / _` | | '  \\() | '_ \\) / -_)  | '_|       | '_ \\) | '_| / _ \\ / _ \\  |  _|    | |) | / _` | |  _|  / _` |    \\ V /   / _` | | || | | |  |  _|  \n");
+  printf("  |_|    \\__,_| |_|_|_|  | .__/  \\___|  |_|         | .__/  |_|   \\___/ \\___/  |_|      |___/  \\__,_|  \\__|  \\__,_|     \\_/    \\__,_|  \\_,_| |_|   \\__|  \n");
+  printf("                         |_|                        |_|                                                                                                  \n");
+  printf("|-------------------------------------|\n");
+  printf("| 1. Create a new vault               |\n");
+  printf("| 2. Add asset to vault               |\n");
+  printf("| 3. List all assets in vault         |\n");
+  printf("| 4. Retrieve asset from vault        |\n");
+  printf("| 5. Check integrity of vault         |\n");
+  printf("| 6. Change password                  |\n");
+  printf("| 7. Clone vault                      |\n");
+  printf("| 8. Exit                             |\n");
+  printf("|-------------------------------------|\n\n");
   printf("Enter your choice: ");
 
-  // Check if scanf successfully read an integer
   if (scanf("%d", &option) != 1)
   {
     printf("Error: Invalid input. Please enter a number.\n");
-    // Clear input buffer
-    while (getchar() != '\n')
+    while (getchar() != '\n') // Clear the input buffer
       ;
     return -1; // Error
   }
@@ -690,8 +695,6 @@ int show_options_menu(void)
 int SGX_CDECL main(int argc, char *argv[])
 {
   int option = 0;
-  sgx_status_t status;
-
   do
   {
     option = show_options_menu();
@@ -764,7 +767,7 @@ int SGX_CDECL main(int argc, char *argv[])
       getchar();
       break;
     }
-    case 2: // FIXME: Add asset to vault
+    case 2: // Add asset to vault
     {
       /* LOGIN VERIFICATION */
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
@@ -834,7 +837,7 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 3: // FIXME: List all assets in vault
+    case 3: // List all assets in vault
     {
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 
@@ -895,6 +898,7 @@ int SGX_CDECL main(int argc, char *argv[])
       printf("Clone vault\n");
       break;
     case 8:
+      printf("\033[H\033[J"); // Clear the screen
       printf("Exiting...\n");
       break;
     default:
