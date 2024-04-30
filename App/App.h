@@ -11,11 +11,16 @@
 
 #define ENCLAVE1_FILENAME "enclave1.signed.so"
 
+/* Hashes */
+#define SHA256_DIGEST_LENGTH 32
+
 /* TPDV SIZES */
 #define FILENAME_SIZE 20 // bytes
 #define CREATOR_SIZE 20  // bytes
 #define PASSWORD_SIZE 20 // bytes
-#define HEADER_SIZE (FILENAME_SIZE + CREATOR_SIZE + PASSWORD_SIZE)
+#define NONCE_SIZE 4 // bytes
+#define ASSETS_SIZE 4 // bytes
+#define HEADER_SIZE (FILENAME_SIZE + CREATOR_SIZE + PASSWORD_SIZE + ASSETS_SIZE + NONCE_SIZE) // bytes
 #define MAX_ASSETS 16000 // 16MB / 1KB = 16K assets
 
 /* ASSET SIZES */

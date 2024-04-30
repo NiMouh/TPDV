@@ -10,8 +10,8 @@ Implementar um cofre digital à **prova de adulteração de arquivos** (TPDV), u
 
 O programa deve ser capaz de:
 - [x] Criar um ficheiro TPDV.
-- [ ] Adicionar um arquivo ao TPDV.
-- [ ] Listar os arquivos no TPDV.
+- [x] Adicionar um arquivo ao TPDV.
+- [x] Listar os arquivos no TPDV.
 - [ ] Extrair um arquivo (ou todos) do TPDV.
 - [ ] Calcular o hash de um arquivo no TPDV.
 - [ ] Alterar a password do TPDV.

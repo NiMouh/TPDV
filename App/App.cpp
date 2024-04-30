@@ -4,10 +4,72 @@
 #include <assert.h>
 #include <iostream>
 #include <fstream>
+#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #include "sgx_urts.h"
 #include "App.h"
 #include "Enclave1_u.h"
+
+uint8_t *sha256_hash(const uint8_t *data, uint32_t data_len)
+{
+  // Allocate memory for the hash result
+  uint8_t *hash_result = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+  if (!hash_result)
+  {
+    // Memory allocation failed
+    return NULL;
+  }
+
+  EVP_MD_CTX *mdctx;
+  const EVP_MD *md;
+  unsigned int md_len;
+
+  // Create new EVP_MD_CTX object
+  mdctx = EVP_MD_CTX_new();
+  if (mdctx == NULL)
+  {
+    // EVP_MD_CTX creation failed
+    free(hash_result);
+    return NULL;
+  }
+
+  // Initialize the EVP_MD_CTX with the SHA-256 digest type
+  md = EVP_sha256();
+
+  // Initialize the digest operation
+  if (1 != EVP_DigestInit_ex(mdctx, md, NULL))
+  {
+    // Error initializing digest operation
+    EVP_MD_CTX_free(mdctx);
+    free(hash_result);
+    return NULL;
+  }
+
+  // Update hash with the data
+  if (1 != EVP_DigestUpdate(mdctx, data, data_len))
+  {
+    // Error updating hash
+    EVP_MD_CTX_free(mdctx);
+    free(hash_result);
+    return NULL;
+  }
+
+  // Finalize hash
+  if (1 != EVP_DigestFinal_ex(mdctx, hash_result, &md_len))
+  {
+    // Error finalizing hash
+    EVP_MD_CTX_free(mdctx);
+    free(hash_result);
+    return NULL;
+  }
+
+  // Clean up EVP_MD_CTX
+  EVP_MD_CTX_free(mdctx);
+
+  // Return the hash result
+  return hash_result;
+}
 
 /*
  * Error reporting
@@ -227,7 +289,7 @@ int create_tpdv(const uint8_t *filename, const uint32_t filename_size, const uin
     return -1;
   }
 
-  uint32_t total_header_size = filename_size + password_size + creator_size + 4 + 4; // 4 bytes for the number of assets and 4 bytes for the none (last 4 bytes of the hash of all the assets)
+  uint32_t total_header_size = filename_size + password_size + creator_size + 4 + 4; // for the number of assets and for the none (last 4 bytes of the hash of all the assets)
   uint8_t header[total_header_size] = {0};
   memcpy(header, filename, filename_size);
   memcpy(header + filename_size, password, password_size);
@@ -356,11 +418,251 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
     return 1;
   }
 
-  // TODO: If it's zero, hash the asset and save the last 4 bytes after the number of assets, and then add the asset
+  // Check how many assets are in the vault
+  uint32_t number_of_assets = 0;
+  memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
 
-  // TODO: If not, add the asset to the end of the vault, hash all the assets and save the last 4 bytes after the number of assets
+  if (number_of_assets >= MAX_ASSETS)
+  {
+    fprintf(stderr, "The vault is full\n");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
 
-  // TODO: Seal the vault and save it to the file
+  // Declare the new vault with the new asset (size of old vault + asset name size + size of the asset + asset size)
+  uint32_t new_vault_size = unsealed_size + ASSETNAME_SIZE + 4 + asset_size;
+  uint8_t *new_vault = (uint8_t *)malloc(new_vault_size);
+
+  // Copy the old vault to the new vault
+  memcpy(new_vault, unsealed_data, unsealed_size);
+
+  // Append the asset name to the new vault
+  memcpy(new_vault + unsealed_size, asset_filename, ASSETNAME_SIZE);
+
+  // Append the asset size to the new vault
+  memcpy(new_vault + unsealed_size + ASSETNAME_SIZE, &asset_size, 4);
+
+  // Append the asset to the new vault
+  memcpy(new_vault + unsealed_size + ASSETNAME_SIZE + 4, asset_data, asset_size);
+
+  // Increment the number of assets and update the new vault
+  number_of_assets++;
+  memcpy(new_vault + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, &number_of_assets, ASSETS_SIZE);
+
+  // Hash the assets using openssl
+  uint8_t *hash_result = sha256_hash(new_vault + HEADER_SIZE, new_vault_size - HEADER_SIZE);
+  if (hash_result == NULL)
+  {
+    fprintf(stderr, "Failed to hash the assets\n");
+    free(sealed_data);
+    free(unsealed_data);
+    free(new_vault);
+    free(asset_data);
+    return 1;
+  }
+
+  uint32_t nonce = 0;
+
+  // Add the last 4 bytes of the hash to the nonce
+  memcpy(&nonce, hash_result + SHA256_DIGEST_LENGTH - 4, 4);
+
+  // Update the new vault with the nonce
+  memcpy(new_vault + HEADER_SIZE - NONCE_SIZE, &nonce, NONCE_SIZE);
+
+  // Print the nonce
+  printf("Nonce: %u\n", nonce);
+
+  // Print the number of assets
+  printf("Number of assets: %u\n", number_of_assets);
+
+  // Print the new vault
+  for (int i = 0; i < new_vault_size; i++)
+  {
+    if (new_vault[i] == '\0')
+      printf("\\0");
+    if (new_vault[i] == '\n')
+      printf("\\n");
+    else
+      printf("%c", new_vault[i]);
+  }
+  printf("\n");
+
+  // Get the size of the sealed new vault
+  if ((status = get_sealed_data_size(global_eid1, &sealed_size, new_vault_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_sealed_data_size");
+    free(sealed_data);
+    free(unsealed_data);
+    free(new_vault);
+    free(asset_data);
+    return 1;
+  }
+
+  // Allocate memory for the sealed new vault
+  sealed_data = (uint8_t *)malloc(sealed_size);
+  if (sealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the sealed new vault\n");
+    free(sealed_data);
+    free(unsealed_data);
+    free(new_vault);
+    free(asset_data);
+    return 1;
+  }
+
+  // Seal the new vault
+  if ((status = seal(global_eid1, &ecall_status, new_vault, new_vault_size, (sgx_sealed_data_t *)sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "seal");
+    free(sealed_data);
+    free(unsealed_data);
+    free(new_vault);
+    free(asset_data);
+    return 1;
+  }
+
+  // Save the sealed new vault to the file
+  if (!write_buf_to_file(filename, sealed_data, sealed_size, 0))
+  {
+    fprintf(stderr, "Failed to write the sealed new vault to the file\n");
+    free(sealed_data);
+    free(unsealed_data);
+    free(new_vault);
+    free(asset_data);
+    return 1;
+  }
+
+  // Destroy the enclave
+  if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "sgx_destroy_enclave");
+    return 1;
+  }
+
+  return 0;
+}
+
+int list_all_assets(const uint8_t *filename, const uint8_t *password)
+{
+  if (initialize_enclave1() < 0)
+  {
+    fprintf(stderr, "Error initializing enclave\n");
+    return -1;
+  }
+
+  uint32_t sealed_size = get_file_size(filename);
+  if (sealed_size == -1)
+  {
+    fprintf(stderr, "The vault file does not exist\n");
+    return 1;
+  }
+
+  uint8_t *sealed_data = (uint8_t *)malloc(sealed_size);
+  if (sealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the sealed data\n");
+    return 1;
+  }
+
+  if (!read_file_to_buf((char *)filename, sealed_data, sealed_size))
+  {
+    fprintf(stderr, "Failed to read the vault file\n");
+    free(sealed_data);
+    return 1;
+  }
+
+  uint32_t unsealed_size = 0;
+  sgx_status_t status, ecall_status;
+  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_unsealed_data_size");
+    free(sealed_data);
+    return 1;
+  }
+
+  // Unseal the vault
+  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+  if (unsealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
+    free(sealed_data);
+    return 1;
+  }
+
+  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "unseal");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Check if the password is correct
+  if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0)
+  {
+    fprintf(stderr, "The password is incorrect\n");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Check how many assets are in the vault
+  uint32_t number_of_assets = 0;
+  memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
+
+  if (number_of_assets == 0)
+  {
+    fprintf(stderr, "The vault is empty\n");
+    free(sealed_data);
+    free(unsealed_data);
+    return 1;
+  }
+
+  // Print all the assets names, size and content
+  for (int i = 0; i < (int)number_of_assets; i++)
+  {
+    // Get the asset name
+    uint8_t asset_name[ASSETNAME_SIZE] = {0};
+    memcpy(asset_name, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4), ASSETNAME_SIZE);
+
+    // Get the asset size
+    uint32_t asset_size = 0;
+    memcpy(&asset_size, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE, 4);
+
+    // Get the asset content
+    uint8_t asset_content[asset_size];
+    memcpy(asset_content, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE + 4, asset_size);
+
+    // Print the asset name
+    printf("Asset name: ");
+    for (int j = 0; j < ASSETNAME_SIZE; j++)
+    {
+      if (asset_name[j] == '\0')
+        printf("\\0");
+      if (asset_name[j] == '\n')
+        printf("\\n");
+      else
+        printf("%c", asset_name[j]);
+    }
+    printf("\n");
+
+    // Print the asset size
+    printf("Asset size: %u\n", asset_size);
+
+    // Print the asset content
+    printf("Asset content: ");
+    for (int j = 0; j < asset_size; j++)
+    {
+      if (asset_content[j] == '\0')
+        printf("\\0");
+      if (asset_content[j] == '\n')
+        printf("\\n");
+      else
+        printf("%c", asset_content[j]);
+    }
+    printf("\n");
+  }
 
   // Destroy the enclave
   if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
@@ -467,13 +769,12 @@ int SGX_CDECL main(int argc, char *argv[])
       if (create_tpdv(filename, FILENAME_SIZE, password, PASSWORD_SIZE, creator, CREATOR_SIZE) != 0)
       {
         printf("Error: Failed to create the vault.\n");
-        break;
       }
 
       printf("Vault created successfully.\n");
       break;
     }
-    case 2: // FIXME: Add asset to vault
+    case 2: // Add asset to vault
     {
       /* LOGIN VERIFICATION */
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
@@ -532,14 +833,52 @@ int SGX_CDECL main(int argc, char *argv[])
       if (add_asset(filename, password, asset_filename) != 0)
       {
         printf("Error: Failed to add the asset to the vault.\n");
-        break;
       }
 
       break;
     }
-    case 3: // TODO: List all assets in vault
-      printf("List all assets in vault\n");
+    case 3: // List all assets in vault
+    {
+      uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
+
+      printf("Enter the filename: ");
+      if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (filename[i] == '\n')
+        {
+          filename[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Enter the password: ");
+      if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (password[i] == '\n')
+        {
+          password[i] = '\0';
+          break;
+        }
+      }
+
+      if (list_all_assets(filename, password) != 0)
+      {
+        printf("Error: Failed to list all assets in the vault.\n");
+      }
       break;
+    }
     case 4: // TODO: Retrieve asset from vault
       printf("Retrieve asset from vault\n");
       break;
