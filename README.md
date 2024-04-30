@@ -30,6 +30,8 @@ O cabeçalho do ficheiro é composto por:
   <i>Fig. 1 - Cabeçalho do TPDV</i>
 </p>
 
+> **Nota:** O campo `NONCE` representa os últimos 4 bytes do hash de todos os assets
+
 Cada ficheiro adicionado ao TPDV é composto por:
 
 <p align="center">
@@ -39,6 +41,8 @@ Cada ficheiro adicionado ao TPDV é composto por:
 <p align="center">
   <i>Fig. 2 - Estrutura de um ficheiro no TPDV</i>
 </p>
+
+> **Nota:** O tamanho do conteúdo do ficheiro não é estático.
 
 ### Funções
 
@@ -50,6 +54,7 @@ O programa é dividido em **dois tipos** de funções:
 - Funções "não seguras": são executadas fora do enclave e têm acesso a memória não selada. 
   - `create_tpdv`
   - `add_asset`
+  - `list_assets`
 
 #### `create_tpdv`
 
@@ -57,10 +62,32 @@ Esta função é responsável por criar um ficheiro TPDV. O ficheiro é criado c
 
 A função tem o seguinte header:
 ```c
-int create_tpdv(uint8_t *filename, size_t filename_size, uint8_t *password, size_t password_size, uint8_t *creator, size_t creator_size);
+int create_tpdv(const uint8_t *filename,const uint32_t filename_size,const uint8_t *password,const uint32_t password_size,const uint8_t *creator,const uint32_t creator_size);
 ```
 
-Devolve `0` em caso de sucesso e `-1` ou `1` em caso de erro.
+E devolve `0` em caso de sucesso e `1` em caso de erro.
+
+#### `add_asset`
+
+Esta função é responsável por adicionar um ficheiro ao TPDV. O ficheiro é adicionado ao array de ficheiros e o array é selado.
+
+A função tem o seguinte header:
+```c
+int add_asset(const uint8_t *filename,const uint32_t filename_size,const uint8_t *password,const uint32_t password_size,const uint8_t *asset,const uint32_t asset_size);
+```
+
+E devolve `0` em caso de sucesso e `1` em caso de erro.
+
+#### `list_assets`
+
+Esta função é responsável por listar os ficheiros no TPDV. A função desencripta o array de ficheiros e imprime o nome de cada ficheiro.
+
+A função tem o seguinte header:
+```c
+int list_assets(const uint8_t *filename, const uint8_t *password);
+```
+
+E devolve `0` em caso de sucesso e `1` em caso de erro.
 
 
 ### Fluxo de execução da aplicação

@@ -774,7 +774,7 @@ int SGX_CDECL main(int argc, char *argv[])
       printf("Vault created successfully.\n");
       break;
     }
-    case 2: // Add asset to vault
+    case 2: // FIXME: Add asset to vault
     {
       /* LOGIN VERIFICATION */
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
@@ -837,7 +837,7 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 3: // List all assets in vault
+    case 3: // FIXME: List all assets in vault
     {
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 
