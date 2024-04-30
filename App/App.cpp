@@ -1,34 +1,3 @@
-/*
- * Copyright (C) 2011-2018 Intel Corporation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
@@ -127,8 +96,8 @@ static sgx_errlist_t sgx_errlist[] =
 
 void print_error_message(sgx_status_t ret, const char *sgx_function_name)
 {
-  size_t ttl = sizeof(sgx_errlist) / sizeof(sgx_errlist[0]);
-  size_t idx;
+  uint32_t ttl = sizeof(sgx_errlist) / sizeof(sgx_errlist[0]);
+  uint32_t idx;
 
   if (sgx_function_name != NULL)
     printf("Function: %s\n", sgx_function_name);
@@ -167,60 +136,89 @@ void ocall_e1_print_string(const char *str)
   printf("%s", str);
 }
 
-static size_t get_file_size(const char *filename)
+static uint32_t get_file_size(const uint8_t *filename)
 {
-  std::ifstream ifs(filename, std::ios::in | std::ios::binary);
+
+  char path[FILENAME_SIZE + 9] = "./vaults/";
+
+  for (int i = 0; i < FILENAME_SIZE; i++)
+  {
+    if (filename[i] == '\0')
+      break;
+    path[i + 9] = filename[i];
+  }
+
+  std::ifstream ifs(path, std::ios::binary);
   if (!ifs.good())
   {
-    std::cout << "Failed to open the file \"" << filename << "\"" << std::endl;
+    std::cout << "Failed to open the file \"" << path << "\"" << std::endl;
     return -1;
   }
   ifs.seekg(0, std::ios::end);
-  size_t size = (size_t)ifs.tellg();
+  uint32_t size = ifs.tellg();
+  ifs.close();
   return size;
 }
 
-static bool read_file_to_buf(const char *filename, uint8_t *buf, size_t bsize)
+static bool read_file_to_buf(const char *filename, uint8_t *buf, uint32_t bsize)
 {
   if (filename == NULL || buf == NULL || bsize == 0)
     return false;
-  std::ifstream ifs(filename, std::ios::binary | std::ios::in);
+
+  char path[FILENAME_SIZE + 9] = "./vaults/";
+
+  for (int i = 0; i < FILENAME_SIZE; i++)
+  {
+    if (filename[i] == '\0')
+      break;
+    path[i + 9] = filename[i];
+  }
+
+  std::ifstream ifs(path, std::ios::binary);
   if (!ifs.good())
   {
-    std::cout << "Failed to open the file \"" << filename << "\"" << std::endl;
+    std::cout << "Failed to open the file \"" << path << "\"" << std::endl;
     return false;
   }
   ifs.read(reinterpret_cast<char *>(buf), bsize);
   if (ifs.fail())
   {
-    std::cout << "Failed to read the file \"" << filename << "\"" << std::endl;
+    std::cout << "Failed to read the file \"" << path << "\"" << std::endl;
     return false;
   }
   return true;
 }
 
-static bool write_buf_to_file(const char *filename, const uint8_t *buf, size_t bsize, long offset)
+static bool write_buf_to_file(const uint8_t *filename, const uint8_t *buf, uint32_t bsize, long offset)
 {
   if (filename == NULL || buf == NULL || bsize == 0)
     return false;
-  std::ofstream ofs(filename, std::ios::binary | std::ios::out);
-  if (!ofs.good())
+
+  char path[FILENAME_SIZE + 9] = "./vaults/";
+
+  for (int i = 0; i < FILENAME_SIZE; i++)
   {
-    std::cout << "Failed to open the file \"" << filename << "\"" << std::endl;
+    if (filename[i] == '\0')
+      break;
+    path[i + 9] = filename[i];
+  }
+
+  // Save file in the vaults directory
+  FILE *file = fopen(path, "wb");
+  if (!file)
+  {
+    fprintf(stderr, "Failed to open the file \"%s\"\n", path);
     return false;
   }
-  ofs.seekp(offset, std::ios::beg);
-  ofs.write(reinterpret_cast<const char *>(buf), bsize);
-  if (ofs.fail())
-  {
-    std::cout << "Failed to write the file \"" << filename << "\"" << std::endl;
-    return false;
-  }
+
+  fseek(file, offset, SEEK_SET);
+  fwrite(buf, 1, bsize, file);
+  fclose(file);
 
   return true;
 }
 
-int create_tpdv(uint8_t *filename, size_t filename_size, uint8_t *password, size_t password_size, uint8_t *creator, size_t creator_size)
+int create_tpdv(const uint8_t *filename, const uint32_t filename_size, const uint8_t *password, const uint32_t password_size, const uint8_t *creator, const uint32_t creator_size)
 {
 
   if (initialize_enclave1() < 0)
@@ -229,25 +227,37 @@ int create_tpdv(uint8_t *filename, size_t filename_size, uint8_t *password, size
     return -1;
   }
 
-  sgx_status_t status;
-
-  uint8_t header[HEADER_SIZE] = {0}; // Create the header (filename + password + creator)
+  uint32_t total_header_size = filename_size + password_size + creator_size + 4 + 4; // 4 bytes for the number of assets and 4 bytes for the none (last 4 bytes of the hash of all the assets)
+  uint8_t header[total_header_size] = {0};
   memcpy(header, filename, filename_size);
   memcpy(header + filename_size, password, password_size);
   memcpy(header + filename_size + password_size, creator, creator_size);
 
-  size_t sealed_size = sizeof(sgx_sealed_data_t) + HEADER_SIZE;
+  // Calculate sealed data size
+  uint32_t sealed_size = 0;
+  sgx_status_t status;
+  if ((status = get_sealed_data_size(global_eid1, &sealed_size, total_header_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_sealed_data_size");
+    return 1;
+  }
+
   uint8_t *sealed_data = (uint8_t *)malloc(sealed_size);
+  if (sealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the sealed data\n");
+    return 1;
+  }
 
   sgx_status_t ecall_status;
-  if ((status = seal(global_eid1, &ecall_status, header, HEADER_SIZE, (sgx_sealed_data_t *)sealed_data, sealed_size)) != SGX_SUCCESS)
+  if ((status = seal(global_eid1, &ecall_status, header, total_header_size, (sgx_sealed_data_t *)sealed_data, sealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "seal");
     free(sealed_data);
     return 1;
   }
 
-  if (!write_buf_to_file((char *)filename, sealed_data, sealed_size, 0))
+  if (!write_buf_to_file(filename, sealed_data, sealed_size, 0))
   {
     fprintf(stderr, "Failed to write the sealed data to the file\n");
     free(sealed_data);
@@ -265,65 +275,14 @@ int create_tpdv(uint8_t *filename, size_t filename_size, uint8_t *password, size
   return 0;
 }
 
-int check_tpdv(const uint8_t *filename, size_t filename_size, const uint8_t *password, size_t password_size)
+int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename)
 {
-  if (initialize_enclave1() < 0)
-    return -1; // Error initializing enclave
 
-  sgx_status_t status;
-
-  size_t sealed_size = get_file_size((char *)filename);
-  if (sealed_size == -1)
-    return 1;
-
-  uint8_t *sealed_data = (uint8_t *)malloc(sealed_size);
-  if (!read_file_to_buf((char *)filename, sealed_data, sealed_size))
-  {
-    std::cout << "Failed to read the sealed data from the file" << std::endl;
-    free(sealed_data);
-    return 1;
-  }
-
-  uint8_t header[HEADER_SIZE] = {0};
-  sgx_status_t ecall_status;
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, header, HEADER_SIZE)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "unseal");
-    free(sealed_data);
-    return 1;
-  }
-
-  if (memcmp(header + FILENAME_SIZE, password, password_size) != 0)
-  {
-    std::cout << "The password is incorrect" << std::endl;
-    free(sealed_data);
-    return 1;
-  }
-
-  free(sealed_data);
-
-  if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "sgx_destroy_enclave");
-    return 1;
-  }
-
-  return 0;
-}
-
-int add_asset(const uint8_t *asset_filename)
-{
-  if (initialize_enclave1() < 0)
-  {
-    fprintf(stderr, "Error initializing enclave\n");
-    return -1;
-  }
-
-  // Open asset file (binary file) and read its content
-  size_t asset_size = get_file_size((char *)asset_filename);
+  // Read the asset file
+  uint32_t asset_size = get_file_size(asset_filename);
   if (asset_size == -1)
   {
-    fprintf(stderr, "Failed to open the asset file\n");
+    fprintf(stderr, "The asset file does not exist\n");
     return 1;
   }
 
@@ -335,60 +294,71 @@ int add_asset(const uint8_t *asset_filename)
     return 1;
   }
 
-  // Read the vault file and unseal it
-  size_t sealed_size = get_file_size((char *)filename);
+  if (initialize_enclave1() < 0)
+  {
+    fprintf(stderr, "Error initializing enclave\n");
+    return -1;
+  }
+
+  uint32_t sealed_size = get_file_size(filename);
   if (sealed_size == -1)
   {
-    fprintf(stderr, "Failed to open the vault file\n");
-    free(asset_data);
-    free(sealed_data);
+    fprintf(stderr, "The vault file does not exist\n");
     return 1;
   }
 
   uint8_t *sealed_data = (uint8_t *)malloc(sealed_size);
+  if (sealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the sealed data\n");
+    return 1;
+  }
+
   if (!read_file_to_buf((char *)filename, sealed_data, sealed_size))
   {
     fprintf(stderr, "Failed to read the vault file\n");
-    free(asset_data);
     free(sealed_data);
     return 1;
   }
 
-  // FIXME: Unseal the vault (he could have assets) have a efficient way to check the vault size
-  uint8_t vault[TPDV_SIZE] = {0};
-  sgx_status_t ecall_status;
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, vault, TPDV_SIZE)) != SGX_SUCCESS)
+  uint32_t unsealed_size = 0;
+  sgx_status_t status, ecall_status;
+  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_unsealed_data_size");
+    free(sealed_data);
+    return 1;
+  }
+
+  // Unseal the vault
+  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+  if (unsealed_data == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
+    free(sealed_data);
+    return 1;
+  }
+
+  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "unseal");
-    free(asset_data);
     free(sealed_data);
+    free(unsealed_data);
     return 1;
   }
 
-  if (ecall_status != 0) // Tampered vault
+  // Check if the password is correct
+  if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0)
   {
-    fprintf(stderr, "The vault is tampered\n");
-    free(asset_data);
+    fprintf(stderr, "The password is incorrect\n");
     free(sealed_data);
-    return 1;
-  }
-
-  uint16_t *number_of_assets = (uint16_t *)(vault + HEADER_SIZE);
-
-  // If it's full, return an error
-  if (*number_of_assets == MAX_ASSETS)
-  {
-    fprintf(stderr, "The vault is full\n");
-    free(asset_data);
-    free(sealed_data);
+    free(unsealed_data);
     return 1;
   }
 
   // TODO: If it's zero, hash the asset and save the last 4 bytes after the number of assets, and then add the asset
-  
 
   // TODO: If not, add the asset to the end of the vault, hash all the assets and save the last 4 bytes after the number of assets
-
 
   // TODO: Seal the vault and save it to the file
 
@@ -399,11 +369,7 @@ int add_asset(const uint8_t *asset_filename)
     return 1;
   }
 
-  free(asset_data);
-  free(sealed_data);
-
   return 0;
-
 }
 
 int show_options_menu(void)
@@ -442,45 +408,63 @@ int SGX_CDECL main(int argc, char *argv[])
   do
   {
     option = show_options_menu();
+    getchar(); // Clear the newline character from the input buffer
 
     switch (option)
     {
     case 1: // Create a new vault
     {
-      uint8_t filename[FILENAME_SIZE], password[PASSWORD_SIZE], creator[CREATOR_SIZE];
+      uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0}, creator[CREATOR_SIZE] = {0};
 
       printf("Enter the filename: ");
-      if (scanf("%s", (char *)filename) != 1)
+      if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
         break;
+      }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (filename[i] == '\n')
+        {
+          filename[i] = '\0';
+          break;
+        }
       }
 
       printf("Enter the password: ");
-      if (scanf("%s", (char *)password) != 1)
+      if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
         break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (password[i] == '\n')
+        {
+          password[i] = '\0';
+          break;
+        }
       }
 
       printf("Enter the creator: ");
-      if (scanf("%s", (char *)creator) != 1)
+      if (fgets((char *)creator, CREATOR_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
         break;
       }
 
-      size_t filename_size = strlen((char *)filename);
-      size_t password_size = strlen((char *)password);
-      size_t creator_size = strlen((char *)creator);
-
-      if (filename_size > FILENAME_SIZE || password_size > PASSWORD_SIZE || creator_size > CREATOR_SIZE)
+      for (int i = 0; i < CREATOR_SIZE; i++)
       {
-        printf("Error: The filename, password, or creator is too long.\n");
-        break;
+        if (creator[i] == '\n')
+        {
+          creator[i] = '\0';
+          break;
+        }
       }
 
-      if (create_tpdv(filename, filename_size, password, password_size, creator, creator_size) != 0)
+      if (create_tpdv(filename, FILENAME_SIZE, password, PASSWORD_SIZE, creator, CREATOR_SIZE) != 0)
       {
         printf("Error: Failed to create the vault.\n");
         break;
@@ -491,62 +475,65 @@ int SGX_CDECL main(int argc, char *argv[])
     }
     case 2: // FIXME: Add asset to vault
     {
-      // Ask for vault filename and password
-      uint8_t filename[FILENAME_SIZE], password[PASSWORD_SIZE];
+      /* LOGIN VERIFICATION */
+      uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
+
       printf("Enter the filename: ");
-      if (scanf("%s", (char *)filename) != 1)
+      if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
         break;
+      }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (filename[i] == '\n')
+        {
+          filename[i] = '\0';
+          break;
+        }
       }
 
       printf("Enter the password: ");
-      if (scanf("%s", (char *)password) != 1)
+      if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
         break;
       }
 
-      size_t filename_size = strlen((char *)filename);
-      size_t password_size = strlen((char *)password);
-
-      if (filename_size > FILENAME_SIZE || password_size > PASSWORD_SIZE)
+      for (int i = 0; i < PASSWORD_SIZE; i++)
       {
-        printf("Error: The filename or password is too long.\n");
-        break;
+        if (password[i] == '\n')
+        {
+          password[i] = '\0';
+          break;
+        }
       }
 
-      // Check if the vault exists and the password is correct
-      if (check_tpdv(filename, filename_size, password, password_size) != 0)
-      {
-        printf("Error: The vault does not exist or the password is incorrect.\n");
-        break;
-      }
-
-      // Add asset to vault
-      uint8_t asset_filename[ASSETNAME_SIZE];
+      /* ADD ASSET */
+      uint8_t asset_filename[ASSETNAME_SIZE] = {0};
 
       printf("Enter the asset filename: ");
-      if (scanf("%s", (char *)asset_filename) != 1)
+      if (fgets((char *)asset_filename, ASSETNAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
         break;
       }
 
-      size_t asset_filename_size = strlen((char *)asset_filename);
-      if (asset_filename_size > ASSETNAME_SIZE)
+      for (int i = 0; i < ASSETNAME_SIZE; i++)
       {
-        printf("Error: The asset filename is too long.\n");
-        break;
+        if (asset_filename[i] == '\n')
+        {
+          asset_filename[i] = '\0';
+          break;
+        }
       }
 
-      if (add_asset(asset_filename) != 0)
+      if (add_asset(filename, password, asset_filename) != 0)
       {
         printf("Error: Failed to add the asset to the vault.\n");
         break;
       }
-
-
 
       break;
     }

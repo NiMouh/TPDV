@@ -1,35 +1,3 @@
-/*
- * Copyright (C) 2011-2018 Intel Corporation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-
 #ifndef _ENCLAVE1_H_
 #define _ENCLAVE1_H_
 
@@ -63,7 +31,7 @@ int generate_random_number(void);
  *
  * @return     Truthy if seal successful, falsy otherwise.
  */
-sgx_status_t seal(uint8_t* plaintext, size_t plaintext_len, sgx_sealed_data_t* sealed_data, size_t sealed_size);
+sgx_status_t seal(uint8_t* plaintext, uint32_t plaintext_len, sgx_sealed_data_t* sealed_data, uint32_t sealed_size);
 
 /**
  * @brief      Unseal the sealed_data given into c-string
@@ -80,9 +48,31 @@ sgx_status_t seal(uint8_t* plaintext, size_t plaintext_len, sgx_sealed_data_t* s
  *
  * @return     Truthy if unseal successful, falsy otherwise.
  */
-sgx_status_t unseal(sgx_sealed_data_t* sealed_data, size_t sealed_size, uint8_t* plaintext, uint32_t plaintext_len);
+sgx_status_t unseal(sgx_sealed_data_t* sealed_data, uint32_t sealed_size, uint8_t* plaintext, uint32_t plaintext_len);
 
 
+/**
+ * @brief      Get the size of the unsealed data
+ * 
+ * @details    The size of the unsealed data is needed to allocate the buffer to store the unsealed data
+ * 
+ * @param      sealed_data        The sealed data
+ * @param[in]  sealed_data_size   The size of the sealed data
+ * 
+ * @return     The size of the unsealed data
+*/
+uint32_t get_unsealed_data_size(uint8_t *sealed_data, uint32_t sealed_data_size);
+
+/**
+ * @brief      Get the size of the sealed data
+ * 
+ * @details    The size of the sealed data is needed to allocate the buffer to store the sealed data
+ * 
+ * @param[in]  plaintext_len    The size of the plaintext
+ * 
+ * @return     The size of the sealed data
+*/
+uint32_t get_sealed_data_size(uint32_t plaintext_len);
 
 #if defined(__cplusplus)
 }

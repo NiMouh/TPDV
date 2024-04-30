@@ -46,9 +46,13 @@ enclave {
     trusted {
         public void e1_printf_hello_world(void);
 
-        public sgx_status_t seal([in, size=plaintext_len]uint8_t* plaintext, size_t plaintext_len, [out, size=sealed_size]sgx_sealed_data_t* sealed_data, size_t sealed_size);
+        public sgx_status_t seal([in, size=plaintext_len]uint8_t* plaintext, uint32_t plaintext_len, [out, size=sealed_size]sgx_sealed_data_t* sealed_data, uint32_t sealed_size);
 
-        public sgx_status_t unseal([in, size=sealed_size]sgx_sealed_data_t* sealed_data, size_t sealed_size, [out, size=plaintext_len]uint8_t* plaintext, uint32_t plaintext_len);
+        public sgx_status_t unseal([in, size=sealed_size]sgx_sealed_data_t* sealed_data, uint32_t sealed_size, [out, size=plaintext_len]uint8_t* plaintext, uint32_t plaintext_len);
+
+        public uint32_t get_unsealed_data_size([in, size=sealed_data_size] uint8_t* sealed_data, uint32_t sealed_data_size);
+
+        public uint32_t get_sealed_data_size(uint32_t plaintext_len);
 
         public int generate_random_number(void);
     };
