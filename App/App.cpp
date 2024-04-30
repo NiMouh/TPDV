@@ -198,6 +198,8 @@ void ocall_e1_print_string(const char *str)
   printf("%s", str);
 }
 
+/* FILE MANAGEMENT FUNCTIONS */
+
 static uint32_t get_file_size(const uint8_t *filename)
 {
 
@@ -279,6 +281,8 @@ static bool write_buf_to_file(const uint8_t *filename, const uint8_t *buf, uint3
 
   return true;
 }
+
+/* APPLICATION FUNCTIONS */
 
 int create_tpdv(const uint8_t *filename, const uint32_t filename_size, const uint8_t *password, const uint32_t password_size, const uint8_t *creator, const uint32_t creator_size)
 {
@@ -634,34 +638,11 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
     uint8_t asset_content[asset_size];
     memcpy(asset_content, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE + 4, asset_size);
 
-    // Print the asset name
-    printf("Asset name: ");
-    for (int j = 0; j < ASSETNAME_SIZE; j++)
-    {
-      if (asset_name[j] == '\0')
-        printf("\\0");
-      if (asset_name[j] == '\n')
-        printf("\\n");
-      else
-        printf("%c", asset_name[j]);
-    }
-    printf("\n");
-
-    // Print the asset size
+    printf("Asset nr: %d\n", i + 1);
+    printf("Asset name: %s\n", asset_name);
     printf("Asset size: %u\n", asset_size);
-
-    // Print the asset content
-    printf("Asset content: ");
-    for (int j = 0; j < asset_size; j++)
-    {
-      if (asset_content[j] == '\0')
-        printf("\\0");
-      if (asset_content[j] == '\n')
-        printf("\\n");
-      else
-        printf("%c", asset_content[j]);
-    }
-    printf("\n");
+    printf("Asset content: %s\n", asset_content);
+    printf("\n\n\n");
   }
 
   // Destroy the enclave
@@ -677,16 +658,21 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
 int show_options_menu(void)
 {
   int option = 0;
-  printf("Tamper-proof Digital Vault\n");
-  printf("  1: Create a new vault\n");
-  printf("  2: Add asset to vault\n");
-  printf("  3: List all assets in vault\n");
-  printf("  4: Retrieve asset from vault\n");
-  printf("  5: Check integrity of vault\n");
-  printf("  6: Password change\n");
-  printf("  7: Clone vault\n");
-  printf("  8: Exit\n");
-  printf("Enter option: ");
+
+  printf("\033[H\033[J"); // Clear the screen
+
+  printf("****************************************\n");
+  printf("*     Tamper-proof Digital Vault     *\n");
+  printf("****************************************\n");
+  printf("1. Create a new vault\n");
+  printf("2. Add asset to vault\n");
+  printf("3. List all assets in vault\n");
+  printf("4. Retrieve asset from vault\n");
+  printf("5. Check integrity of vault\n");
+  printf("6. Password change\n");
+  printf("7. Clone vault\n");
+  printf("8. Exit\n\n");
+  printf("Enter your choice: ");
 
   // Check if scanf successfully read an integer
   if (scanf("%d", &option) != 1)
@@ -695,8 +681,7 @@ int show_options_menu(void)
     // Clear input buffer
     while (getchar() != '\n')
       ;
-    // Return a special value indicating an error
-    return -1;
+    return -1; // Error
   }
 
   return option;
@@ -766,12 +751,17 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
+      printf("\033[H\033[J"); // Clear the screen
+
       if (create_tpdv(filename, FILENAME_SIZE, password, PASSWORD_SIZE, creator, CREATOR_SIZE) != 0)
       {
         printf("Error: Failed to create the vault.\n");
       }
 
-      printf("Vault created successfully.\n");
+      printf("Vault created successfully.\n\n");
+
+      printf("Press ENTER to continue...");
+      getchar();
       break;
     }
     case 2: // FIXME: Add asset to vault
@@ -830,10 +820,17 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
+      printf("\033[H\033[J"); // Clear the screen
+
       if (add_asset(filename, password, asset_filename) != 0)
       {
         printf("Error: Failed to add the asset to the vault.\n");
       }
+
+      printf("Asset added successfully.\n\n");
+
+      printf("Press ENTER to continue...");
+      getchar();
 
       break;
     }
@@ -873,10 +870,16 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
+      printf("\033[H\033[J"); // Clear the screen
+
       if (list_all_assets(filename, password) != 0)
       {
         printf("Error: Failed to list all assets in the vault.\n");
       }
+
+      printf("Press ENTER to continue...");
+      getchar();
+
       break;
     }
     case 4: // TODO: Retrieve asset from vault
