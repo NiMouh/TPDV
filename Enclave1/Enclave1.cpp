@@ -25,13 +25,8 @@ int printf(const char *fmt, ...)
 }
 
 /*
- * ECALL (it just prints a string)
+ * ECALLs
  */
-
-void e1_printf_hello_world(void)
-{
-    printf("Hello, %s!\n", "enclave");
-}
 
 sgx_status_t seal(uint8_t *plaintext, uint32_t plaintext_len, sgx_sealed_data_t *sealed_data, uint32_t sealed_size)
 {
@@ -162,6 +157,64 @@ void e1_add_asset(const uint8_t *asset_filename, uint32_t asset_filename_size, c
 
     free(unsealed_data);
     free(new_vault);
+}
+
+void e1_list_all_assets(const uint8_t *sealed_data, uint32_t sealed_size)
+{
+    uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
+
+    uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+    if (unsealed_data == NULL)
+    {
+        printf("Failed to allocate memory for the unsealed data\n");
+        return;
+    }
+
+    if (sgx_unseal_data((sgx_sealed_data_t *)sealed_data, NULL, NULL, unsealed_data, &unsealed_size) != SGX_SUCCESS)
+    {
+        printf("Failed to unseal the data\n");
+        free(unsealed_data);
+        return;
+    }
+
+    uint32_t number_of_assets = 0;
+    memcpy(&number_of_assets, unsealed_data + HEADER_SIZE - NONCE_SIZE - ASSETS_SIZE, ASSETS_SIZE);
+    if (number_of_assets == 0)
+    {
+        printf("The vault is empty\n");
+        free(unsealed_data);
+        return;
+    }
+
+    int offset = HEADER_SIZE; // Skip the header
+    for (int index = 0; index < (int)number_of_assets; index++)
+    {
+        if (offset >= unsealed_size)
+        {
+            printf("End of the vault\n");
+            break;
+        }
+        uint8_t asset_name[ASSETNAME_SIZE + 1] = {0}; // +1 for null terminator
+        memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
+        asset_name[ASSETNAME_SIZE] = '\0'; // Null terminate the string
+
+        uint32_t asset_size = 0;
+        offset += ASSETNAME_SIZE;
+        memcpy(&asset_size, unsealed_data + offset, 4);
+
+        uint8_t asset_content[asset_size + 1]; // +1 for null terminator
+        offset += 4;
+        memcpy(asset_content, unsealed_data + offset, asset_size);
+        asset_content[asset_size] = '\0'; // Null terminate the string
+
+        offset += asset_size;
+
+        printf("ASSET %d\n\n", index + 1);
+        printf("Filename: %s\n", (char *)asset_name);
+        printf("Content size: %u\n", asset_size);
+        printf("Content: %s\n", (char *)asset_content);
+        printf("\n\n");
+    }
 }
 
 void e1_change_password(const uint8_t *old_password, uint32_t old_password_size, const uint8_t *new_password, uint32_t new_password_size, const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *new_sealed_data, uint32_t new_sealed_size)

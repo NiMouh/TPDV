@@ -456,7 +456,7 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
 
 int list_all_assets(const uint8_t *filename, const uint8_t *password)
 {
-  sgx_status_t status, ecall_status;
+  sgx_status_t status;
   if (initialize_enclave1() < 0)
   {
     fprintf(stderr, "Error initializing enclave\n");
@@ -499,67 +499,12 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
     return 1;
   }
 
-  /* START */
-
-  uint32_t unsealed_size = 0;
-  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  if((status = e1_list_all_assets(global_eid1, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
-    print_error_message(status, "get_unsealed_data_size");
+    print_error_message(status, "list_all_assets");
     free(sealed_data);
     return 1;
   }
-
-  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
-  if (unsealed_data == NULL)
-  {
-    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
-    free(sealed_data);
-    return 1;
-  }
-
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "unseal");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  uint32_t number_of_assets = 0;
-  memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
-
-  if (number_of_assets == 0)
-  {
-    fprintf(stderr, "The vault is empty\n");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  int offset = HEADER_SIZE; // Skip the header
-  for (int index = 0; index < (int)number_of_assets; index++)
-  {
-    uint8_t asset_name[ASSETNAME_SIZE + 1] = {0}; // +1 for null terminator
-    memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
-    asset_name[ASSETNAME_SIZE] = '\0'; // Null terminate the string
-
-    uint32_t asset_size = 0;
-    memcpy(&asset_size, unsealed_data + offset + ASSETNAME_SIZE, sizeof(uint32_t));
-
-    uint8_t asset_content[asset_size + 1]; // +1 for null terminator
-    memcpy(asset_content, unsealed_data + offset + ASSETNAME_SIZE + sizeof(uint32_t), asset_size);
-    asset_content[asset_size] = '\0'; // Null terminate the string
-
-    offset += ASSETNAME_SIZE + sizeof(uint32_t) + asset_size;
-
-    printf("ASSET %d\n\n", index + 1);
-    printf("Filename: %s\n", (char *)asset_name);
-    printf("Content size: %u\n", asset_size);
-    printf("Content: %s\n", (char *)asset_content);
-    printf("\n\n");
-  }
-
-  /* END */
 
   if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
   {
@@ -1079,7 +1024,7 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 3: // FIXME: List all assets in vault (ADD LOGIC TO THE ENCLAVE)
+    case 3: // List all assets in vault
     {
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 

@@ -24,8 +24,6 @@ extern "C" {
 #define ASSETNAME_SIZE 20 // bytes
 
 int printf(const char *fmt, ...);
-void e1_printf_hello_world(void);
-int generate_random_number(void);
 
 /**
  * @brief      Seals the plaintext given into the sgx_sealed_data_t structure
