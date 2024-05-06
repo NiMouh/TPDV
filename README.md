@@ -8,12 +8,12 @@
 
 Implementar um cofre digital à **prova de adulteração de arquivos** (TPDV), utilizando **Intel SGX enclaves**. O cofre pode ser destruído, mas nunca vai ser possível mudar o conteúdo dos arquivos sem que o cofre perceba. O foco desta implementação é a **integridade** dos arquivos, **não a confidencialidade**.
 
-O programa deve ser capaz de: (Funções de adição têm que ir para o enclave)
+O programa deve ser capaz de:
 - [x] Criar um ficheiro TPDV.
 - [x] Adicionar um arquivo ao TPDV.
 - [x] Listar os arquivos no TPDV.
 - [x] Extrair um arquivo (ou todos) do TPDV.
-- [ ] Calcular o hash de um arquivo no TPDV.
+- [x] Calcular o hash de um arquivo no TPDV.
 - [x] Alterar a password do TPDV.
 - [ ] Clonar o TPDV para outro SGX enclave.
 
@@ -56,6 +56,7 @@ O programa é dividido em **dois tipos** de funções:
   - `add_asset`
   - `list_assets`
   - `change_password`
+  - `retrieve_asset`
   - `check_asset_integrity`
 
 #### `create_tpdv`
@@ -109,6 +110,17 @@ Esta função é responsável por verificar a integridade de um ficheiro no TPDV
 A função tem o seguinte header:
 ```c
 int check_asset_integrity(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename)
+```
+
+E devolve `0` em caso de sucesso e `1` em caso de erro.
+
+#### `retrieve_asset`
+
+Esta função é responsável por extrair um ficheiro do TPDV. A função dá *unseal* ao TPDV, procura o ficheiro e devolve o conteúdo do ficheiro.
+
+A função tem o seguinte header:
+```c
+int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename)
 ```
 
 E devolve `0` em caso de sucesso e `1` em caso de erro.

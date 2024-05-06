@@ -343,7 +343,6 @@ int create_tpdv(const uint8_t *filename, const uint32_t filename_size, const uin
 
 int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename)
 {
-
   // Read the asset file
   uint32_t asset_size = get_file_size(asset_filename);
   if (asset_size == -1)
@@ -360,6 +359,7 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
     return 1;
   }
 
+  sgx_status_t status;
   if (initialize_enclave1() < 0)
   {
     fprintf(stderr, "Error initializing enclave\n");
@@ -387,121 +387,60 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
     return 1;
   }
 
+  int result = 0;
+  if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_password");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The password is incorrect\n");
+    free(sealed_data);
+    return 1;
+  }
+
+  // Get the new unsealed size
   uint32_t unsealed_size = 0;
-  sgx_status_t status, ecall_status;
+
   if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "get_unsealed_data_size");
     free(sealed_data);
     return 1;
   }
+  uint32_t new_unsealed_size = unsealed_size + ASSETNAME_SIZE + 4 + asset_size;
 
-  // Unseal the vault
-  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
-  if (unsealed_data == NULL)
-  {
-    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
-    free(sealed_data);
-    return 1;
-  }
-
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "unseal");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  // Check if the password is correct
-  if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0)
-  {
-    fprintf(stderr, "The password is incorrect\n");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  // Check how many assets are in the vault
-  uint32_t number_of_assets = 0;
-  memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
-
-  if (number_of_assets >= MAX_ASSETS)
-  {
-    fprintf(stderr, "The vault is full\n");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  // Append the asset to the end of the vault
-  uint32_t new_vault_size = unsealed_size + ASSETNAME_SIZE + 4 + asset_size;
-  uint8_t *new_vault = (uint8_t *)malloc(new_vault_size);
-
-  memcpy(new_vault, unsealed_data, unsealed_size);
-
-  memcpy(new_vault + unsealed_size, asset_filename, ASSETNAME_SIZE);
-
-  memcpy(new_vault + unsealed_size + ASSETNAME_SIZE, &asset_size, 4);
-
-  memcpy(new_vault + unsealed_size + ASSETNAME_SIZE + 4, asset_data, asset_size);
-
-  number_of_assets++;
-  memcpy(new_vault + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, &number_of_assets, ASSETS_SIZE);
-
-  // Hash all the assets
-  uint8_t *hash_result = sha256_hash(new_vault + HEADER_SIZE, new_vault_size - HEADER_SIZE);
-  if (hash_result == NULL)
-  {
-    fprintf(stderr, "Failed to hash the assets\n");
-    free(sealed_data);
-    free(unsealed_data);
-    free(new_vault);
-    free(asset_data);
-    return 1;
-  }
-
-  uint32_t nonce = 0;
-  memcpy(&nonce, hash_result + SHA256_DIGEST_LENGTH - 4, 4);
-  memcpy(new_vault + HEADER_SIZE - NONCE_SIZE, &nonce, NONCE_SIZE);
-
-  if ((status = get_sealed_data_size(global_eid1, &sealed_size, new_vault_size)) != SGX_SUCCESS)
+  // Create the new_sealed_data size
+  uint32_t new_sealed_size = 0;
+  if ((status = get_sealed_data_size(global_eid1, &new_sealed_size, new_unsealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "get_sealed_data_size");
     free(sealed_data);
-    free(unsealed_data);
-    free(new_vault);
-    free(asset_data);
     return 1;
   }
-
-  sealed_data = (uint8_t *)malloc(sealed_size);
-  if (sealed_data == NULL)
+  uint8_t *new_sealed_data = (uint8_t *)malloc(new_sealed_size);
+  if (new_sealed_data == NULL)
   {
-    fprintf(stderr, "Failed to allocate memory for the sealed new vault\n");
+    fprintf(stderr, "Failed to allocate memory for the new sealed data\n");
     free(sealed_data);
-    free(unsealed_data);
-    free(new_vault);
-    free(asset_data);
     return 1;
   }
 
-  if ((status = seal(global_eid1, &ecall_status, new_vault, new_vault_size, (sgx_sealed_data_t *)sealed_data, sealed_size)) != SGX_SUCCESS)
+  if ((status = e1_add_asset(global_eid1, asset_filename, ASSETNAME_SIZE, sealed_data, sealed_size, asset_data, asset_size, new_sealed_data, new_sealed_size)) != SGX_SUCCESS)
   {
-    print_error_message(status, "seal");
+    print_error_message(status, "add_asset");
     free(sealed_data);
-    free(unsealed_data);
-    free(new_vault);
-    free(asset_data);
+    free(new_sealed_data);
     return 1;
   }
 
-  if (!write_buf_to_file(filename, sealed_data, sealed_size, 0))
+  if (!write_buf_to_file(filename, new_sealed_data, new_sealed_size, 0))
   {
     fprintf(stderr, "Failed to write the sealed new vault to the file\n");
     free(sealed_data);
-    free(unsealed_data);
-    free(new_vault);
     free(asset_data);
     return 1;
   }
@@ -517,6 +456,7 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
 
 int list_all_assets(const uint8_t *filename, const uint8_t *password)
 {
+  sgx_status_t status, ecall_status;
   if (initialize_enclave1() < 0)
   {
     fprintf(stderr, "Error initializing enclave\n");
@@ -544,8 +484,22 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
     return 1;
   }
 
+  int result = 0;
+  if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_password");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The password is incorrect\n");
+    free(sealed_data);
+    return 1;
+  }
+
   uint32_t unsealed_size = 0;
-  sgx_status_t status, ecall_status;
   if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "get_unsealed_data_size");
@@ -564,14 +518,6 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
   if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "unseal");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0) // incorrect password
-  {
-    fprintf(stderr, "The password is incorrect\n");
     free(sealed_data);
     free(unsealed_data);
     return 1;
@@ -622,7 +568,7 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
 
 int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename)
 {
-
+  sgx_status_t status, ecall_status;
   if (initialize_enclave1() < 0)
   {
     fprintf(stderr, "Error initializing enclave\n");
@@ -650,8 +596,22 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
     return 1;
   }
 
+  int result = 0;
+  if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_password");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The password is incorrect\n");
+    free(sealed_data);
+    return 1;
+  }
+
   uint32_t unsealed_size = 0;
-  sgx_status_t status, ecall_status;
   if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "get_unsealed_data_size");
@@ -676,44 +636,14 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
     return 1;
   }
 
-  if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0)
-  {
-    fprintf(stderr, "The password is incorrect\n");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
   // Check how many assets are in the vault
   uint32_t number_of_assets = 0;
   memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
-
-  if (number_of_assets >= MAX_ASSETS)
-  {
-    fprintf(stderr, "The vault is full\n");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  if (number_of_assets == 0)
-  {
-    fprintf(stderr, "The vault is empty\n");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
 
   for (int i = 0; i < (int)number_of_assets; i++)
   {
     uint8_t asset_name[ASSETNAME_SIZE] = {0};
     memcpy(asset_name, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4), ASSETNAME_SIZE);
-
-    uint32_t asset_size = 0;
-    memcpy(&asset_size, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE, 4);
-
-    uint8_t asset_content[asset_size];
-    memcpy(asset_content, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE + 4, asset_size);
 
     const char *name_str = (const char *)asset_name;
     const char *filename_str = (const char *)asset_filename;
@@ -722,6 +652,12 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
     {
       continue;
     }
+
+    uint32_t asset_size = 0;
+    memcpy(&asset_size, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE, 4);
+
+    uint8_t asset_content[asset_size];
+    memcpy(asset_content, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE + 4, asset_size);
 
     if (!write_buf_to_file(asset_filename, asset_content, asset_size, 0))
     {
@@ -743,6 +679,7 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
 
 int change_password(const uint8_t *filename, const uint8_t *old_password, const uint8_t *new_password)
 {
+  sgx_status_t status;
   if (initialize_enclave1() < 0)
   {
     fprintf(stderr, "Error initializing enclave\n");
@@ -770,54 +707,42 @@ int change_password(const uint8_t *filename, const uint8_t *old_password, const 
     return 1;
   }
 
-  uint32_t unsealed_size = 0;
-  sgx_status_t status, ecall_status;
-  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  uint8_t *new_sealed_data = (uint8_t *)malloc(sealed_size);
+  if (new_sealed_data == NULL)
   {
-    print_error_message(status, "get_unsealed_data_size");
+    fprintf(stderr, "Failed to allocate memory for the new sealed data\n");
     free(sealed_data);
     return 1;
   }
 
-  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
-  if (unsealed_data == NULL)
+  int result = 0;
+  if ((status = e1_check_password(global_eid1, old_password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
-    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
+    print_error_message(status, "check_password");
     free(sealed_data);
     return 1;
   }
 
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
+  if (!result)
   {
-    print_error_message(status, "unseal");
+    fprintf(stderr, "The password is incorrect\n");
     free(sealed_data);
-    free(unsealed_data);
     return 1;
   }
 
-  if (strcmp((char *)old_password, (char *)unsealed_data + FILENAME_SIZE) != 0) // incorrect password
+  if ((status = e1_change_password(global_eid1, old_password, PASSWORD_SIZE, new_password, PASSWORD_SIZE, sealed_data, sealed_size, new_sealed_data, sealed_size)) != SGX_SUCCESS)
   {
-    fprintf(stderr, "The old password is incorrect\n");
+    print_error_message(status, "change_password");
+    free(new_sealed_data);
     free(sealed_data);
-    free(unsealed_data);
     return 1;
   }
 
-  memcpy(unsealed_data + FILENAME_SIZE, new_password, PASSWORD_SIZE); // Update the password
-
-  if ((status = seal(global_eid1, &ecall_status, unsealed_data, unsealed_size, (sgx_sealed_data_t *)sealed_data, sealed_size)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "seal");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  if (!write_buf_to_file(filename, sealed_data, sealed_size, 0))
+  if (!write_buf_to_file(filename, new_sealed_data, sealed_size, 0))
   {
     fprintf(stderr, "Failed to write the sealed new vault to the file\n");
     free(sealed_data);
-    free(unsealed_data);
+    free(new_sealed_data);
     return 1;
   }
 
@@ -848,6 +773,7 @@ int check_asset_integrity(const uint8_t *filename, const uint8_t *password, cons
     return 1;
   }
 
+  sgx_status_t status, ecall_status;
   if (initialize_enclave1() < 0)
   {
     fprintf(stderr, "Error initializing enclave\n");
@@ -875,59 +801,44 @@ int check_asset_integrity(const uint8_t *filename, const uint8_t *password, cons
     return 1;
   }
 
-  uint32_t unsealed_size = 0;
-  sgx_status_t status, ecall_status;
-  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  int result = 0;
+  if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
-    print_error_message(status, "get_unsealed_data_size");
+    print_error_message(status, "check_password");
     free(sealed_data);
     return 1;
   }
 
-  // Unseal the vault
-  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
-  if (unsealed_data == NULL)
-  {
-    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
-    free(sealed_data);
-    return 1;
-  }
-
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "unseal");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  // Check if the password is correct
-  if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0)
+  if (!result)
   {
     fprintf(stderr, "The password is incorrect\n");
     free(sealed_data);
-    free(unsealed_data);
     return 1;
   }
 
-  // TODO: Get the asset from the vault and calculate the hash (make the get_asset_from_vault function in the enclave)
-  uint8_t *asset; // get_asset_from_vault(unsealed_data, asset_filename, asset_vault_hash);
-  if (asset == NULL)
+  // Get the asset from the vault and calculate the hash (make the get_asset_from_vault function in the enclave)
+  uint8_t *asset_vault_hash = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+  if (asset_vault_hash == NULL)
   {
-    fprintf(stderr, "The asset does not exist in the vault\n");
+    fprintf(stderr, "Failed to allocate memory for the asset vault hash\n");
     free(sealed_data);
-    free(unsealed_data);
     return 1;
   }
 
-  uint8_t *asset_vault_hash = sha256_hash(asset, asset_size);
+  if ((status = e1_get_asset_hash_from_vault(global_eid1, asset_filename, ASSETNAME_SIZE, sealed_data, sealed_size, asset_vault_hash, SHA256_DIGEST_LENGTH)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_hash_from_vault");
+    free(sealed_data);
+    free(asset_vault_hash);
+    return 1;
+  }
+
   uint8_t *asset_file_hash = sha256_hash(asset_data, asset_size);
 
   if (memcmp(asset_file_hash, asset_vault_hash, SHA256_DIGEST_LENGTH) != 0)
   {
     fprintf(stderr, "The asset has been tampered with!\n");
     free(sealed_data);
-    free(unsealed_data);
     return 1;
   }
 
@@ -1172,7 +1083,7 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 4: // TODO: Retrieve asset from vault
+    case 4: // Retrieve asset from vault
     {
       printf("Retrieve asset from vault\n");
 
@@ -1245,69 +1156,69 @@ int SGX_CDECL main(int argc, char *argv[])
       break;
     }
     case 5: // Check integrity of an asset
+    {
       // (Calculate the hash of the asset and calculate the asset of the content in the vault and compare them)
+      uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0}, asset_filename[ASSETNAME_SIZE] = {0};
+
+      printf("Enter the filename: ");
+      if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
-        uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0}, asset_filename[ASSETNAME_SIZE] = {0};
-
-        printf("Enter the filename: ");
-        if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
-        {
-          printf("Error: Invalid input. Please enter a string.\n");
-          break;
-        }
-
-        for (int i = 0; i < FILENAME_SIZE; i++)
-        {
-          if (filename[i] == '\n')
-          {
-            filename[i] = '\0';
-            break;
-          }
-        }
-
-        printf("Enter the password: ");
-        if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
-        {
-          printf("Error: Invalid input. Please enter a string.\n");
-          break;
-        }
-
-        for (int i = 0; i < PASSWORD_SIZE; i++)
-        {
-          if (password[i] == '\n')
-          {
-            password[i] = '\0';
-            break;
-          }
-        }
-
-        printf("Enter the asset filename: ");
-        if (fgets((char *)asset_filename, ASSETNAME_SIZE, stdin) == NULL)
-        {
-          printf("Error: Invalid input. Please enter a string.\n");
-          break;
-        }
-
-        for (int i = 0; i < ASSETNAME_SIZE; i++)
-        {
-          if (asset_filename[i] == '\n')
-          {
-            asset_filename[i] = '\0';
-            break;
-          }
-        }
-
-        printf("\033[H\033[J"); // Clear the screen
-        if (check_asset_integrity(filename, password, asset_filename) != 0)
-        {
-          printf("Error: Failed to check the integrity of the asset.\n");
-        }
-
-        printf("Press ENTER to continue...");
-        getchar();
-
+        printf("Error: Invalid input. Please enter a string.\n");
         break;
       }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (filename[i] == '\n')
+        {
+          filename[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Enter the password: ");
+      if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (password[i] == '\n')
+        {
+          password[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Enter the asset filename: ");
+      if (fgets((char *)asset_filename, ASSETNAME_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < ASSETNAME_SIZE; i++)
+      {
+        if (asset_filename[i] == '\n')
+        {
+          asset_filename[i] = '\0';
+          break;
+        }
+      }
+
+      printf("\033[H\033[J"); // Clear the screen
+      if (check_asset_integrity(filename, password, asset_filename) != 0)
+      {
+        printf("Error: Failed to check the integrity of the asset.\n");
+      }
+
+      printf("Press ENTER to continue...");
+      getchar();
+
+      break;
+    }
     case 6: // Password change
     {
       uint8_t filename[FILENAME_SIZE] = {0}, old_password[PASSWORD_SIZE] = {0}, confirm_old_password[PASSWORD_SIZE] = {0}, new_password[PASSWORD_SIZE] = {0};
@@ -1396,12 +1307,16 @@ int SGX_CDECL main(int argc, char *argv[])
       break;
     }
     case 7: // TODO: Clone vault
+    {
       printf("Clone vault\n");
       break;
-    case 8:                   // Exit
+    }
+    case 8: // Exit
+    {
       printf("\033[H\033[J"); // Clear the screen
       printf("Exiting...\n");
       break;
+    }
     default:
       printf("Invalid option\n");
       break;
