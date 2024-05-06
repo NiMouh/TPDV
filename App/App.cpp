@@ -562,75 +562,28 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
 
   /* START */
 
-  uint32_t unsealed_size = 0;
-  if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "get_unsealed_data_size");
-    free(sealed_data);
-    return 1;
-  }
-
-  // Unseal the vault
-  uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
-  if (unsealed_data == NULL)
-  {
-    fprintf(stderr, "Failed to allocate memory for the unsealed data\n");
-    free(sealed_data);
-    return 1;
-  }
-
-  if ((status = unseal(global_eid1, &ecall_status, (sgx_sealed_data_t *)sealed_data, sealed_size, unsealed_data, unsealed_size)) != SGX_SUCCESS)
-  {
-    print_error_message(status, "unseal");
-    free(sealed_data);
-    free(unsealed_data);
-    return 1;
-  }
-
-  uint8_t asset_name[ASSETNAME_SIZE] = {0};
-  uint8_t *asset_content = NULL;
   uint32_t asset_size = 0;
-
-  // Check how many assets are in the vault
-  uint32_t number_of_assets = 0;
-  memcpy(&number_of_assets, unsealed_data + HEADER_SIZE - NONCE_SIZE, ASSETS_SIZE);
-
-  int offset = HEADER_SIZE; // Skip the header
-  for (int index = 0; index < (int)number_of_assets; index++)
+  if ((status = e1_get_asset_size(global_eid1, asset_filename, ASSETNAME_SIZE, sealed_data, sealed_size, &asset_size)) != SGX_SUCCESS)
   {
-    if(offset >= unsealed_size)
-    {
-      fprintf(stderr, "The asset does not exist\n");
-      free(sealed_data);
-      free(unsealed_data);
-      return 1;
-    }
+    print_error_message(status, "get_asset_size");
+    free(sealed_data);
+    return 1;
+  }
 
-    memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
-    
-    offset += ASSETNAME_SIZE;
-    memcpy(&asset_size, unsealed_data + offset, 4);
+  uint8_t *asset_content = (uint8_t *)malloc(asset_size);
+  if (asset_content == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory for the asset content\n");
+    free(sealed_data);
+    return 1;
+  }
 
-    if (memcmp(asset_name, asset_filename, ASSETNAME_SIZE) != 0)
-    {
-      
-      offset += 4 + asset_size; // Skip the asset size and the asset content
-      continue;
-    }
-
-    offset += 4; // Skip the asset size
-
-    asset_content = (uint8_t *)malloc(asset_size);
-    if (asset_content == NULL)
-    {
-      fprintf(stderr, "Failed to allocate memory for the asset content\n");
-      free(sealed_data);
-      free(unsealed_data);
-      return 1;
-    }
-    memcpy(asset_content, unsealed_data + offset, asset_size);
-    
-    break;
+  if ((status = e1_retrieve_asset(global_eid1, asset_filename, ASSETNAME_SIZE, sealed_data, sealed_size, asset_content, asset_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "retrieve_asset");
+    free(sealed_data);
+    free(asset_content);
+    return 1;
   }
 
   /* END */
@@ -1072,7 +1025,7 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 4: // FIXME: Retrieve asset from vault (ADD LOGIC TO THE ENCLAVE)
+    case 4: // Retrieve asset from vault
     {
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 

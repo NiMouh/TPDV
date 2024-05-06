@@ -217,6 +217,111 @@ void e1_list_all_assets(const uint8_t *sealed_data, uint32_t sealed_size)
     }
 }
 
+void e1_get_asset_size(const uint8_t *asset_filename, uint32_t asset_filename_size, const uint8_t *sealed_data, uint32_t sealed_size, uint32_t *asset_size)
+{
+    uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
+
+    uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+    if (unsealed_data == NULL)
+    {
+        printf("Failed to allocate memory for the unsealed data\n");
+        return;
+    }
+
+    if (sgx_unseal_data((sgx_sealed_data_t *)sealed_data, NULL, NULL, unsealed_data, &unsealed_size) != SGX_SUCCESS)
+    {
+        printf("Failed to unseal the data\n");
+        free(unsealed_data);
+        return;
+    }
+
+    // Search for the asset
+    uint32_t number_of_assets = 0;
+    memcpy(&number_of_assets, unsealed_data + HEADER_SIZE - NONCE_SIZE - ASSETS_SIZE, ASSETS_SIZE);
+
+    uint8_t asset_name[ASSETNAME_SIZE] = {0};
+    uint32_t asset_content_size = 0;
+    int offset = HEADER_SIZE;
+    for (int index = 0; index < (int)number_of_assets; index++)
+    {
+        if (offset >= unsealed_size)
+        {
+            printf("Content out of bounds!\n");
+            break;
+        }
+
+        memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
+
+        offset += ASSETNAME_SIZE;
+        memcpy(&asset_content_size, unsealed_data + offset, 4);
+
+        if (memcmp(asset_name, asset_filename, ASSETNAME_SIZE) == 0)
+        {
+            offset += 4; // skip the asset size
+            break;
+        }
+
+        offset += sizeof(uint32_t) + asset_content_size;
+    }
+
+    *asset_size = asset_content_size;
+
+    free(unsealed_data);
+}
+
+void e1_retrieve_asset(const uint8_t *asset_filename, uint32_t asset_filename_size, const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *asset, uint32_t asset_size)
+{
+    uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
+
+    uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+    if (unsealed_data == NULL)
+    {
+        printf("Failed to allocate memory for the unsealed data\n");
+        return;
+    }
+
+    if (sgx_unseal_data((sgx_sealed_data_t *)sealed_data, NULL, NULL, unsealed_data, &unsealed_size) != SGX_SUCCESS)
+    {
+        printf("Failed to unseal the data\n");
+        free(unsealed_data);
+        return;
+    }
+
+    // Search for the asset
+    uint32_t number_of_assets = 0;
+    memcpy(&number_of_assets, unsealed_data + HEADER_SIZE - NONCE_SIZE - ASSETS_SIZE, ASSETS_SIZE);
+
+    uint8_t asset_name[ASSETNAME_SIZE] = {0};
+    uint32_t asset_content_size = 0;
+    int offset = HEADER_SIZE;
+    for (int index = 0; index < (int)number_of_assets; index++)
+    {
+        if (offset >= unsealed_size)
+        {
+            printf("Content out of bounds!\n");
+            break;
+        }
+
+        memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
+
+        offset += ASSETNAME_SIZE;
+        memcpy(&asset_content_size, unsealed_data + offset, 4);
+
+        if (memcmp(asset_name, asset_filename, ASSETNAME_SIZE) == 0)
+        {
+            offset += 4; // skip the asset size
+            break;
+        }
+
+        offset += sizeof(uint32_t) + asset_content_size;
+    }
+
+    // Get the asset content
+    memcpy(asset, unsealed_data + offset, asset_content_size);
+
+    free(unsealed_data);
+}
+
 void e1_change_password(const uint8_t *old_password, uint32_t old_password_size, const uint8_t *new_password, uint32_t new_password_size, const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *new_sealed_data, uint32_t new_sealed_size)
 {
     uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
