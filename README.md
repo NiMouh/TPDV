@@ -172,7 +172,7 @@ Este fluxo é ilustrado usando a seguinte figura:
 
 Por fazer...
 
-## Compilação
+## Execução
 
 Para compilar o programa, basta executar os seguintes comandos:
 
@@ -182,4 +182,7 @@ $ ./app
 ```
 
 ## Conclusão
+
+> [!NOTE] 
+> Not chatgpt shit, falar realmente que objetivos atingimos, como foi a experiencia, o que aprendemos e o que podiamos ter melhorado (ou será melhorado nos próximos trabalhos), seja a nível de organizacional, ou a nível técnico.
 
