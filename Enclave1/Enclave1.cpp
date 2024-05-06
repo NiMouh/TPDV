@@ -191,12 +191,9 @@ void e1_change_password(const uint8_t *old_password, uint32_t old_password_size,
     free(unsealed_data);
 }
 
-// FIXME: ERRORS IN THE HASHING
 void e1_get_asset_hash_from_vault(const uint8_t *asset_filename, uint32_t asset_filename_size, const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *hash, uint32_t hash_size)
 {
     uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
-
-    printf("Unsealed size: %d\n", unsealed_size);
 
     uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
     if (unsealed_data == NULL)
@@ -213,25 +210,35 @@ void e1_get_asset_hash_from_vault(const uint8_t *asset_filename, uint32_t asset_
     }
 
     // Search for the asset
-    uint32_t number_of_assets = 0, asset_index = 0;
+    uint32_t number_of_assets = 0;
     memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
 
+    uint8_t asset_name[ASSETNAME_SIZE] = {0};
+    uint32_t asset_size = 0;
+    int offset = HEADER_SIZE;
     for (int index = 0; index < (int)number_of_assets; index++)
     {
-        uint8_t asset_name[ASSETNAME_SIZE] = {0};
-        memcpy(asset_name, unsealed_data + HEADER_SIZE + index * (ASSETNAME_SIZE + 4), ASSETNAME_SIZE);
+        if (offset >= unsealed_size)
+        {
+            printf("Content out of bounds!\n");
+            break;
+        }
+
+        memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
+
+        offset += ASSETNAME_SIZE;
+        memcpy(&asset_size, unsealed_data + offset, 4);
 
         if (memcmp(asset_name, asset_filename, ASSETNAME_SIZE) == 0)
         {
-            asset_index = index;
+            offset += 4; // skip the asset size
             break;
         }
+
+        offset += sizeof(uint32_t) + asset_size;
     }
 
     // Get the asset content
-    uint32_t asset_size = 0;
-    memcpy(&asset_size, unsealed_data + HEADER_SIZE + asset_index * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE, 4);
-
     uint8_t *asset = (uint8_t *)malloc(asset_size);
     if (asset == NULL)
     {
@@ -240,7 +247,7 @@ void e1_get_asset_hash_from_vault(const uint8_t *asset_filename, uint32_t asset_
         return;
     }
 
-    memcpy(asset, unsealed_data + HEADER_SIZE + asset_index * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE + 4, asset_size);
+    memcpy(asset, unsealed_data + offset, asset_size);
 
     sgx_sha256_hash_t hash_result;
     sgx_sha_state_handle_t sha_handle = NULL;

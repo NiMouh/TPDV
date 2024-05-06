@@ -499,6 +499,8 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
     return 1;
   }
 
+  /* START */
+
   uint32_t unsealed_size = 0;
   if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
@@ -557,6 +559,8 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
     printf("\n\n");
   }
 
+  /* END */
+
   if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
   {
     print_error_message(status, "sgx_destroy_enclave");
@@ -611,6 +615,8 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
     return 1;
   }
 
+  /* START */
+
   uint32_t unsealed_size = 0;
   if ((status = get_unsealed_data_size(global_eid1, &unsealed_size, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
@@ -636,35 +642,59 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
     return 1;
   }
 
+  uint8_t asset_name[ASSETNAME_SIZE] = {0};
+  uint8_t *asset_content = NULL;
+  uint32_t asset_size = 0;
+
   // Check how many assets are in the vault
   uint32_t number_of_assets = 0;
-  memcpy(&number_of_assets, unsealed_data + FILENAME_SIZE + PASSWORD_SIZE + CREATOR_SIZE, ASSETS_SIZE);
+  memcpy(&number_of_assets, unsealed_data + HEADER_SIZE - NONCE_SIZE, ASSETS_SIZE);
 
-  for (int i = 0; i < (int)number_of_assets; i++)
+  int offset = HEADER_SIZE; // Skip the header
+  for (int index = 0; index < (int)number_of_assets; index++)
   {
-    uint8_t asset_name[ASSETNAME_SIZE] = {0};
-    memcpy(asset_name, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4), ASSETNAME_SIZE);
-
-    const char *name_str = (const char *)asset_name;
-    const char *filename_str = (const char *)asset_filename;
-
-    if (strcmp(name_str, filename_str) != 0)
+    if(offset >= unsealed_size)
     {
+      fprintf(stderr, "The asset does not exist\n");
+      free(sealed_data);
+      free(unsealed_data);
+      return 1;
+    }
+
+    memcpy(asset_name, unsealed_data + offset, ASSETNAME_SIZE);
+    
+    offset += ASSETNAME_SIZE;
+    memcpy(&asset_size, unsealed_data + offset, 4);
+
+    if (memcmp(asset_name, asset_filename, ASSETNAME_SIZE) != 0)
+    {
+      
+      offset += 4 + asset_size; // Skip the asset size and the asset content
       continue;
     }
 
-    uint32_t asset_size = 0;
-    memcpy(&asset_size, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE, 4);
+    offset += 4; // Skip the asset size
 
-    uint8_t asset_content[asset_size];
-    memcpy(asset_content, unsealed_data + HEADER_SIZE + i * (ASSETNAME_SIZE + 4) + ASSETNAME_SIZE + 4, asset_size);
-
-    if (!write_buf_to_file(asset_filename, asset_content, asset_size, 0))
+    asset_content = (uint8_t *)malloc(asset_size);
+    if (asset_content == NULL)
     {
-      fprintf(stderr, "Failed to write the unsealed data to the file\n");
+      fprintf(stderr, "Failed to allocate memory for the asset content\n");
       free(sealed_data);
+      free(unsealed_data);
       return 1;
     }
+    memcpy(asset_content, unsealed_data + offset, asset_size);
+    
+    break;
+  }
+
+  /* END */
+
+  if (!write_buf_to_file(asset_filename, asset_content, asset_size, 0))
+  {
+    fprintf(stderr, "Failed to write the unsealed data to the file\n");
+    free(sealed_data);
+    return 1;
   }
 
   // Destroy the enclave
@@ -756,7 +786,7 @@ int change_password(const uint8_t *filename, const uint8_t *old_password, const 
   return 0;
 }
 
-int check_asset_integrity(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename) // FIXME: Complete this function
+int check_asset_integrity(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename)
 {
   uint32_t asset_size = get_file_size(asset_filename);
   if (asset_size == -1)
@@ -835,6 +865,20 @@ int check_asset_integrity(const uint8_t *filename, const uint8_t *password, cons
 
   uint8_t *asset_file_hash = sha256_hash(asset_data, asset_size);
 
+  printf("SHA256(Asset from File): ");
+  for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+  {
+    printf("%02x", asset_file_hash[i]);
+  }
+  printf("\n");
+
+  printf("SHA256(Asset from TPDV): ");
+  for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+  {
+    printf("%02x", asset_vault_hash[i]);
+  }
+  printf("\n");
+
   if (memcmp(asset_file_hash, asset_vault_hash, SHA256_DIGEST_LENGTH) != 0)
   {
     fprintf(stderr, "The asset has been tampered with!\n");
@@ -904,7 +948,7 @@ int SGX_CDECL main(int argc, char *argv[])
     {
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0}, creator[CREATOR_SIZE] = {0};
 
-      printf("Enter the filename: ");
+      printf("Enter the vault filename: ");
       if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -920,7 +964,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Enter the password: ");
+      printf("Enter the vault password: ");
       if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -936,7 +980,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Enter the creator: ");
+      printf("Enter the vault creator: ");
       if (fgets((char *)creator, CREATOR_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -970,7 +1014,7 @@ int SGX_CDECL main(int argc, char *argv[])
       /* LOGIN VERIFICATION */
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 
-      printf("Enter the filename: ");
+      printf("Enter the vault filename: ");
       if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -986,7 +1030,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Enter the password: ");
+      printf("Enter the vault password: ");
       if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1035,11 +1079,11 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 3: // List all assets in vault
+    case 3: // FIXME: List all assets in vault (ADD LOGIC TO THE ENCLAVE)
     {
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 
-      printf("Enter the filename: ");
+      printf("Enter the vault filename: ");
       if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1055,7 +1099,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Enter the password: ");
+      printf("Enter the vault password: ");
       if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1083,13 +1127,11 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 4: // Retrieve asset from vault
+    case 4: // FIXME: Retrieve asset from vault (ADD LOGIC TO THE ENCLAVE)
     {
-      printf("Retrieve asset from vault\n");
-
       uint8_t filename[FILENAME_SIZE] = {0}, password[PASSWORD_SIZE] = {0};
 
-      printf("Enter the filename: ");
+      printf("Enter the vault filename: ");
       if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1105,7 +1147,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Enter the password: ");
+      printf("Enter the vault password: ");
       if (fgets((char *)password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1223,7 +1265,7 @@ int SGX_CDECL main(int argc, char *argv[])
     {
       uint8_t filename[FILENAME_SIZE] = {0}, old_password[PASSWORD_SIZE] = {0}, confirm_old_password[PASSWORD_SIZE] = {0}, new_password[PASSWORD_SIZE] = {0};
 
-      printf("Enter the filename: ");
+      printf("Enter the vault filename: ");
       if (fgets((char *)filename, FILENAME_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1239,7 +1281,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Enter the old password: ");
+      printf("Enter the old vault password: ");
       if (fgets((char *)old_password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1255,7 +1297,7 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      printf("Confirm the old password: ");
+      printf("Confirm the old vault password: ");
       if (fgets((char *)confirm_old_password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
@@ -1271,13 +1313,13 @@ int SGX_CDECL main(int argc, char *argv[])
         }
       }
 
-      if (strcmp((char *)old_password, (char *)confirm_old_password) != 0)
+      if (memcmp(old_password, confirm_old_password, PASSWORD_SIZE) != 0)
       {
-        printf("Error: The old passwords do not match.\n");
+        printf("Error: The passwords do not match.\n");
         break;
       }
 
-      printf("Enter the new password: ");
+      printf("Enter the new vault password: ");
       if (fgets((char *)new_password, PASSWORD_SIZE, stdin) == NULL)
       {
         printf("Error: Invalid input. Please enter a string.\n");
