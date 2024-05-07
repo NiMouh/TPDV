@@ -10,66 +10,7 @@
 #include "sgx_urts.h"
 #include "App.h"
 #include "Enclave1_u.h"
-
-uint8_t *sha256_hash(const uint8_t *data, uint32_t data_len)
-{
-  // Allocate memory for the hash result
-  uint8_t *hash_result = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
-  if (!hash_result)
-  {
-    // Memory allocation failed
-    return NULL;
-  }
-
-  EVP_MD_CTX *mdctx;
-  const EVP_MD *md;
-  unsigned int md_len;
-
-  // Create new EVP_MD_CTX object
-  mdctx = EVP_MD_CTX_new();
-  if (mdctx == NULL)
-  {
-    // EVP_MD_CTX creation failed
-    free(hash_result);
-    return NULL;
-  }
-
-  // Initialize the EVP_MD_CTX with the SHA-256 digest type
-  md = EVP_sha256();
-
-  // Initialize the digest operation
-  if (1 != EVP_DigestInit_ex(mdctx, md, NULL))
-  {
-    // Error initializing digest operation
-    EVP_MD_CTX_free(mdctx);
-    free(hash_result);
-    return NULL;
-  }
-
-  // Update hash with the data
-  if (1 != EVP_DigestUpdate(mdctx, data, data_len))
-  {
-    // Error updating hash
-    EVP_MD_CTX_free(mdctx);
-    free(hash_result);
-    return NULL;
-  }
-
-  // Finalize hash
-  if (1 != EVP_DigestFinal_ex(mdctx, hash_result, &md_len))
-  {
-    // Error finalizing hash
-    EVP_MD_CTX_free(mdctx);
-    free(hash_result);
-    return NULL;
-  }
-
-  // Clean up EVP_MD_CTX
-  EVP_MD_CTX_free(mdctx);
-
-  // Return the hash result
-  return hash_result;
-}
+#include "Enclave2_u.h"
 
 /*
  * Error reporting
@@ -176,7 +117,7 @@ void print_error_message(sgx_status_t ret, const char *sgx_function_name)
 }
 
 /*
- * Enclave stuff
+ * Enclave1 stuff
  */
 
 sgx_enclave_id_t global_eid1 = 0;
@@ -194,6 +135,29 @@ int initialize_enclave1(void)
 }
 
 void ocall_e1_print_string(const char *str)
+{
+  printf("%s", str);
+}
+
+/*
+ * Enclave2 stuff
+ */
+
+sgx_enclave_id_t global_eid2 = 0;
+
+int initialize_enclave2(void)
+{
+  sgx_status_t ret;
+
+  if ((ret = sgx_create_enclave(ENCLAVE2_FILENAME, SGX_DEBUG_FLAG, NULL, NULL, &global_eid2, NULL)) != SGX_SUCCESS)
+  {
+    print_error_message(ret, "sgx_create_enclave (enclave2)");
+    return -1;
+  }
+  return 0;
+}
+
+void ocall_e2_print_string(const char *str)
 {
   printf("%s", str);
 }
@@ -280,6 +244,55 @@ static bool write_buf_to_file(const uint8_t *filename, const uint8_t *buf, uint3
   fclose(file);
 
   return true;
+}
+
+/* HASHING FUNCTIONS */
+
+uint8_t *sha256_hash(const uint8_t *data, uint32_t data_len)
+{
+  uint8_t *hash_result = (uint8_t *)malloc(SHA256_DIGEST_LENGTH);
+  if (!hash_result)
+  {
+    return NULL;
+  }
+
+  EVP_MD_CTX *mdctx;
+  const EVP_MD *md;
+  unsigned int md_len;
+
+  mdctx = EVP_MD_CTX_new(); // Create a new context
+  if (mdctx == NULL)
+  {
+    free(hash_result);
+    return NULL;
+  }
+
+  md = EVP_sha256(); // SHA-256 digest type
+
+  if (1 != EVP_DigestInit_ex(mdctx, md, NULL))
+  {
+    EVP_MD_CTX_free(mdctx);
+    free(hash_result);
+    return NULL;
+  }
+
+  if (1 != EVP_DigestUpdate(mdctx, data, data_len))
+  {
+    EVP_MD_CTX_free(mdctx);
+    free(hash_result);
+    return NULL;
+  }
+
+  if (1 != EVP_DigestFinal_ex(mdctx, hash_result, &md_len))
+  {
+    EVP_MD_CTX_free(mdctx);
+    free(hash_result);
+    return NULL;
+  }
+
+  EVP_MD_CTX_free(mdctx);
+
+  return hash_result;
 }
 
 /* APPLICATION FUNCTIONS */
@@ -499,7 +512,7 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
     return 1;
   }
 
-  if((status = e1_list_all_assets(global_eid1, sealed_data, sealed_size)) != SGX_SUCCESS)
+  if ((status = e1_list_all_assets(global_eid1, sealed_data, sealed_size)) != SGX_SUCCESS)
   {
     print_error_message(status, "list_all_assets");
     free(sealed_data);
@@ -794,6 +807,163 @@ int check_asset_integrity(const uint8_t *filename, const uint8_t *password, cons
 
   return 0;
 }
+
+// FIXME: The unseal part in the Enclave 2 is not working properly
+int clone_tpdv(const uint8_t *original_tpdv, const uint8_t *original_password, const uint8_t *cloned_tpdv, const uint8_t *cloned_password)
+{
+  sgx_status_t status,dh_status;
+  sgx_dh_msg1_t msg1;
+  sgx_dh_msg2_t msg2;
+  sgx_dh_msg3_t msg3;
+
+  // Initialize both enclaves
+  if (initialize_enclave1() < 0)
+  {
+    fprintf(stderr, "Error initializing enclave\n");
+    return -1;
+  }
+
+  if (initialize_enclave2() < 0)
+  {
+    fprintf(stderr, "Error initializing enclave\n");
+    return -1;
+  }
+
+  // Get the sealed data from the original tpdv
+  uint32_t sealed_size = get_file_size(original_tpdv);
+  if (sealed_size == -1)
+  {
+    fprintf(stderr, "The vault file does not exist\n");
+    return 1;
+  }
+
+  uint8_t sealed_data[sealed_size] = {0};
+
+  if (!read_file_to_buf((char *)original_tpdv, sealed_data, sealed_size))
+  {
+    fprintf(stderr, "Failed to read the vault file\n");
+    return 1;
+  }
+
+  // Check the password of the original tpdv
+  int result = 0;
+  if ((status = e1_check_password(global_eid1, original_password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_password");
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The password is incorrect\n");
+    return 1;
+  }
+
+  // Start the key exchange (diffie-hellman)
+  if ((status = e1_init_session(global_eid1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS)
+  {
+    print_error_message((status != SGX_SUCCESS) ? status : dh_status,"e1_init_session");
+    return 1;
+  }
+
+  if ((status = e2_init_session(global_eid2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS)
+  {
+    print_error_message((status != SGX_SUCCESS) ? status : dh_status,"e2_init_session");
+    return 1;
+  }
+
+  if((status = e2_create_message1(global_eid2,&msg1,&dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS)
+  {
+    print_error_message((status != SGX_SUCCESS) ? status : dh_status,"e2_create_message1");
+    return 1;
+  }
+
+  if((status = e1_process_message1(global_eid1,&msg1,&msg2,&dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS)
+  {
+    print_error_message((status != SGX_SUCCESS) ? status : dh_status,"e1_process_message1");
+    return 1;
+  }
+
+  if((status = e2_process_message2(global_eid2,&msg2,&msg3,&dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS)
+  {
+    print_error_message((status != SGX_SUCCESS) ? status : dh_status,"e2_process_message2");
+    return 1;
+  }
+
+  if((status = e1_process_message3(global_eid1,&msg3,&dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS)
+  {
+    print_error_message((status != SGX_SUCCESS) ? status : dh_status,"e1_process_message3");
+    return 1;
+  }
+
+  // Show the secret key
+  if((status = e1_show_secret_key(global_eid1)) != SGX_SUCCESS)
+  {
+    print_error_message(status,"e1_show_secret_key");
+    return 1;
+  }
+
+  if((status = e2_show_secret_key(global_eid2)) != SGX_SUCCESS)
+  {
+    print_error_message(status,"e2_show_secret_key");
+    return 1;
+  }
+
+  // Get the unsealed size to declare the ciphertext
+  uint32_t ciphertext_size = 0;
+  if ((status = get_unsealed_data_size(global_eid1, &ciphertext_size, sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "get_unsealed_data_size");
+    return 1;
+  }
+
+  uint8_t ciphertext[ciphertext_size] = {0};
+
+  // Declare function that unseales and encrypts the data
+  if((status = e1_unseal_and_cipher(global_eid1,sealed_data,sealed_size,ciphertext,ciphertext_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status,"e1_unseal_and_cipher");
+    return 1;
+  }
+
+  // Declare function that decrypts and seals the data
+  if((status = e2_decipher_and_seal(global_eid2,ciphertext,ciphertext_size,sealed_data,sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status,"e2_decipher_and_seal");
+    return 1;
+  }
+
+  // Write the new sealed data to the cloned tpdv
+  if (!write_buf_to_file(cloned_tpdv, sealed_data, sealed_size, 0))
+  {
+    fprintf(stderr, "Failed to write the sealed new vault to the file\n");
+    return 1;
+  }
+
+  // List all assets in the cloned tpdv
+  if ((status = e2_list_all_assets(global_eid2, sealed_data, sealed_size)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "list_all_assets");
+    return 1;
+  }
+
+  // Destroy the enclaves
+  if ((status = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "sgx_destroy_enclave");
+    return 1;
+  }
+
+  if ((status = sgx_destroy_enclave(global_eid2)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "sgx_destroy_enclave");
+    return 1;
+  }
+
+  return 0;
+}
+
+/* MENU FUNCTIONS*/
 
 int show_options_menu(void)
 {
@@ -1246,9 +1416,110 @@ int SGX_CDECL main(int argc, char *argv[])
 
       break;
     }
-    case 7: // TODO: Clone vault
+    case 7: // Clone vault
     {
-      printf("Clone vault\n");
+      uint8_t original_tpdv[FILENAME_SIZE] = {0}, original_password[PASSWORD_SIZE] = {0}, confirm_original_password[PASSWORD_SIZE] = {0}, cloned_tpdv[FILENAME_SIZE] = {0}, cloned_password[PASSWORD_SIZE] = {0};
+
+      printf("Enter the original vault filename: ");
+      if (fgets((char *)original_tpdv, FILENAME_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (original_tpdv[i] == '\n')
+        {
+          original_tpdv[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Enter the original vault password: ");
+      if (fgets((char *)original_password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (original_password[i] == '\n')
+        {
+          original_password[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Confirm the original vault password: ");
+      if (fgets((char *)confirm_original_password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (confirm_original_password[i] == '\n')
+        {
+          confirm_original_password[i] = '\0';
+          break;
+        }
+      }
+
+      if (memcmp(original_password, confirm_original_password, PASSWORD_SIZE) != 0)
+      {
+        printf("Error: The passwords do not match.\n");
+        break;
+      }
+
+      printf("\033[H\033[J"); // Clear the screen
+
+      printf("Enter the cloned vault filename: ");
+      if (fgets((char *)cloned_tpdv, FILENAME_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < FILENAME_SIZE; i++)
+      {
+        if (cloned_tpdv[i] == '\n')
+        {
+          cloned_tpdv[i] = '\0';
+          break;
+        }
+      }
+
+      printf("Enter the cloned vault password: ");
+      if (fgets((char *)cloned_password, PASSWORD_SIZE, stdin) == NULL)
+      {
+        printf("Error: Invalid input. Please enter a string.\n");
+        break;
+      }
+
+      for (int i = 0; i < PASSWORD_SIZE; i++)
+      {
+        if (cloned_password[i] == '\n')
+        {
+          cloned_password[i] = '\0';
+          break;
+        }
+      }
+
+      printf("\033[H\033[J"); // Clear the screen
+
+      if (clone_tpdv(original_tpdv, original_password, cloned_tpdv, cloned_password) != 0)
+      {
+        printf("Error: Failed to clone the vault.\n");
+      }
+
+      printf("Vault cloned successfully.\n\n");
+
+      printf("Press ENTER to continue...");
+      getchar();
+
       break;
     }
     case 8: // Exit

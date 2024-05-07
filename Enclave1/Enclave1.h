@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include "sgx_dh.h"
 
 #if defined(__cplusplus)
 extern "C" {

@@ -33,7 +33,7 @@
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk
-SGX_MODE ?= SIM
+SGX_MODE ?= SIM # HW
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 0
 SGX_PRERELEASE ?= 1
@@ -153,6 +153,35 @@ Enclave1_Name := enclave1.so
 Signed_Enclave1_Name := enclave1.signed.so
 Enclave1_Config_File := Enclave1/Enclave1.config.xml
 
+######## Enclave2 Settings ########
+
+Enclave2_Cpp_Files := Enclave2/Enclave2.cpp
+Enclave2_Include_Paths := -IInclude -IEnclave2 -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
+
+Enclave2_C_Flags = $(Enclave_C_Flags) $(Enclave2_Include_Paths)
+Enclave2_Cpp_Flags := $(Enclave2_C_Flags) -std=c++11 -nostdinc++
+
+# To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
+#    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
+#       so that the whole content of trts is included in the enclave.
+#    2. For other libraries, you just need to pull the required symbols.
+#       Use `--start-group' and `--end-group' to link these libraries.
+# Do NOT move the libraries linked with `--start-group' and `--end-group' within `--whole-archive' and `--no-whole-archive' options.
+# Otherwise, you may get some undesirable errors.
+Enclave2_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
+	-Wl,--whole-archive -l$(Trts_Library_Name) -Wl,--no-whole-archive \
+	-Wl,--start-group -lsgx_tstdc -lsgx_tcxx -l$(Crypto_Library_Name) -l$(Service_Library_Name) -Wl,--end-group \
+	-Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
+	-Wl,-pie,-eenclave_entry -Wl,--export-dynamic  \
+	-Wl,--defsym,__ImageBase=0 -Wl,--gc-sections   \
+	-Wl,--version-script=Enclave2/Enclave2.lds
+
+Enclave2_Cpp_Objects := $(Enclave2_Cpp_Files:.cpp=.o)
+
+Enclave2_Name := enclave2.so
+Signed_Enclave2_Name := enclave2.signed.so
+Enclave2_Config_File := Enclave2/Enclave2.config.xml
+
 ## Build mode
 
 ifeq ($(SGX_MODE), HW)
@@ -177,15 +206,19 @@ endif
 .PHONY: all run
 
 ifeq ($(Build_Mode), HW_RELEASE)
-all: .config_$(Build_Mode)_$(SGX_ARCH) $(App_Name) $(Enclave1_Name)
+all: .config_$(Build_Mode)_$(SGX_ARCH) $(App_Name) $(Enclave1_Name) $(Enclave2_Name)
 	@echo "The project has been built in release hardware mode."
 	@echo "Please sign the $(Enclave1_Name) first with your signing key before you run the $(App_Name) to launch and access the enclave."
 	@echo "To sign the enclave use the command:"
 	@echo "   $(SGX_ENCLAVE_SIGNER) sign -key <your key> -enclave $(Enclave1_Name) -out <$(Signed_Enclave1_Name)> -config $(Enclave1_Config_File)"
 	@echo "You can also sign the enclave using an external signing tool."
+	@echo "Please sign the $(Enclave2_Name) first with your signing key before you run the $(App_Name) to launch and access the enclave."
+	@echo "To sign the enclave use the command:"
+	@echo "   $(SGX_ENCLAVE_SIGNER) sign -key <your key> -enclave $(Enclave2_Name) -out <$(Signed_Enclave2_Name)> -config $(Enclave2_Config_File)"
+	@echo "You can also sign the enclave using an external signing tool."
 	@echo "To build the project in simulation mode set SGX_MODE=SIM. To build the project in prerelease mode set SGX_PRERELEASE=1 and SGX_MODE=HW."
 else
-all: .config_$(Build_Mode)_$(SGX_ARCH) $(App_Name) $(Signed_Enclave1_Name)
+all: .config_$(Build_Mode)_$(SGX_ARCH) $(App_Name) $(Signed_Enclave1_Name) $(Signed_Enclave2_Name)
 ifeq ($(Build_Mode), HW_DEBUG)
 	@echo "The project has been built in debug hardware mode."
 else ifeq ($(Build_Mode), SIM_DEBUG)
@@ -215,16 +248,24 @@ App/Enclave1_u.o: App/Enclave1_u.c
 	@$(CC) $(App_C_Flags) -c $< -o $@
 	@echo "CC   <=  $<"
 
+App/Enclave2_u.c: $(SGX_EDGER8R) Enclave2/Enclave2.edl
+	@cd App && $(SGX_EDGER8R) --untrusted ../Enclave2/Enclave2.edl --search-path ../Enclave2 --search-path $(SGX_SDK)/include
+	@echo "GEN  =>  $@"
+
+App/Enclave2_u.o: App/Enclave2_u.c
+	@$(CC) $(App_C_Flags) -c $< -o $@
+	@echo "CC   <=  $<"
+
 App/%.o: App/%.cpp
 	@$(CXX) $(App_Cpp_Flags) -c $< -o $@
 	@echo "CXX  <=  $<"
 
-$(App_Name): App/Enclave1_u.o $(App_Cpp_Objects)
+$(App_Name): App/Enclave1_u.o App/Enclave2_u.o $(App_Cpp_Objects)
 	@$(CXX) $^ -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
 
 .config_$(Build_Mode)_$(SGX_ARCH):
-	@rm -f .config_* $(App_Name) $(Enclave1_Name) $(Signed_Enclave1_Name) $(App_Cpp_Objects) App/Enclave1_u.* $(Enclave1_Cpp_Objects) Enclave1/Enclave1_t.*
+	@rm -f .config_* $(App_Name) $(Enclave1_Name) $(Enclave2_Name) $(Signed_Enclave1_Name) $(Signed_Enclave2_Name) $(App_Cpp_Objects) App/Enclave1_u.* App/Enclave2_u.* $(Enclave1_Cpp_Objects) $(Enclave2_Cpp_Objects) Enclave1/Enclave1_t.* Enclave2/Enclave2_t.*
 	@touch .config_$(Build_Mode)_$(SGX_ARCH)
 
 ######## Enclave1 Objects ########
@@ -249,7 +290,29 @@ $(Signed_Enclave1_Name): $(Enclave1_Name) $(Enclave1_Config_File)
 	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave1/Enclave1_private_key.pem -enclave $(Enclave1_Name) -out $@ -config $(Enclave1_Config_File)
 	@echo "SIGN =>  $@"
 
+######## Enclave2 Objects ########
+
+Enclave2/Enclave2_t.c: $(SGX_EDGER8R) Enclave2/Enclave2.edl
+	@cd Enclave2 && $(SGX_EDGER8R) --trusted ../Enclave2/Enclave2.edl --search-path ../Enclave2 --search-path $(SGX_SDK)/include
+	@echo "GEN  =>  $@"
+
+Enclave2/Enclave2_t.o: Enclave2/Enclave2_t.c
+	@$(CC) $(Enclave2_C_Flags) -c $< -o $@
+	@echo "CC   <=  $<"
+
+Enclave2/%.o: Enclave2/%.cpp
+	@$(CXX) $(Enclave2_Cpp_Flags) -c $< -o $@
+	@echo "CXX  <=  $<"
+
+$(Enclave2_Name): Enclave2/Enclave2_t.o $(Enclave2_Cpp_Objects)
+	@$(CXX) $^ -o $@ $(Enclave2_Link_Flags)
+	@echo "LINK =>  $@"
+
+$(Signed_Enclave2_Name): $(Enclave2_Name) $(Enclave2_Config_File)
+	@$(SGX_ENCLAVE_SIGNER) sign -key Enclave2/Enclave2_private_key.pem -enclave $(Enclave2_Name) -out $@ -config $(Enclave2_Config_File)
+	@echo "SIGN =>  $@"
+
 .PHONY: clean
 
 clean:
-	@rm -f .config_* $(App_Name) $(Enclave1_Name) $(Signed_Enclave1_Name) $(App_Cpp_Objects) App/Enclave1_u.* $(Enclave1_Cpp_Objects) Enclave1/Enclave1_t.* a.out
+	@rm -f .config_* $(App_Name) $(Enclave1_Name) $(Enclave2_Name) $(Signed_Enclave1_Name) $(Signed_Enclave2_Name) $(App_Cpp_Objects) App/Enclave1_u.* App/Enclave2_u.* $(Enclave1_Cpp_Objects) $(Enclave2_Cpp_Objects) Enclave1/Enclave1_t.* Enclave2/Enclave2_t.* a.out
