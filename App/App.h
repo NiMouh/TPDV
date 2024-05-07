@@ -34,22 +34,19 @@
 extern "C" {
 #endif
 
-/**
- * @brief Create a new vault
- *
- * @details It takes a nonce (random int number), filename, password, creator and number of assets (0 in this case), saves them in a unsigned char array, seals it and saves it in a file.
- *
- * @param filename Vault filename
- * @param filename_size Vault filename size
- * @param password Vault password
- * @param password_size Vault password size
- * @param creator Vault creator
- * @param creator_size Vault creator size
- *
- * @return 0 if the vault was created successfully, 1 otherwise
- */
-int create_tpdv(const uint8_t *filename,const uint32_t filename_size,const uint8_t *password,const uint32_t password_size,const uint8_t *creator,const uint32_t creator_size);
+static bool read_file_to_buf(const char *filename, uint8_t *buf, uint32_t bsize);
+static bool write_buf_to_file(const uint8_t *filename, const uint8_t *buf, uint32_t bsize, long offset);
 
+uint8_t *sha256_hash(const uint8_t *data, uint32_t data_len);
+
+int create_tpdv(const uint8_t *filename,const uint32_t filename_size,const uint8_t *password,const uint32_t password_size,const uint8_t *creator,const uint32_t creator_size);
+int list_all_assets2(const uint8_t *filename, const uint8_t *password);
+int list_all_assets(const uint8_t *sealed_data, uint32_t sealed_size);
+int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename);
+int change_password(const uint8_t *filename, const uint8_t *old_password, const uint8_t *new_password);
+int check_asset_integrity(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename);
+int clone_tpdv(const uint8_t *original_tpdv, const uint8_t *original_password, const uint8_t *cloned_tpdv, const uint8_t *cloned_password);
+int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *asset_filename);
 
 
 #if defined(__cplusplus)

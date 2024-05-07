@@ -57,10 +57,16 @@ extern "C" {
 #define ASSETNAME_SIZE 20 // bytes
 
 int printf(const char *fmt, ...);
+
+void e2_list_all_assets(const uint8_t *sealed_data, uint32_t sealed_size);
+void e2_check_password(const uint8_t *password, uint32_t password_size, const uint8_t *sealed_data, uint32_t sealed_size, int *result);
+
 void e2_init_session(sgx_status_t *dh_status);
 void e2_generate_message1(sgx_dh_msg1_t *msg1,sgx_status_t *dh_status);
 void e2_process_message2(const sgx_dh_msg2_t *msg2,sgx_dh_msg3_t *msg3,sgx_status_t *dh_status);
 void e2_show_secret_key(void);
+
+void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, const uint8_t *password, uint32_t password_size, uint8_t *sealed_data, uint32_t sealed_size);
 
 #if defined(__cplusplus)
 }

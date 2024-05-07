@@ -174,7 +174,7 @@ void e2_show_secret_key(void)
     printf("\n");
 }
 
-void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, uint8_t *sealed_data, uint32_t sealed_size)
+void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, const uint8_t *password, uint32_t password_size, uint8_t *sealed_data, uint32_t sealed_size)
 {
     uint8_t *plaintext = (uint8_t *)malloc(ciphertext_size);
     if (plaintext == NULL)
@@ -187,13 +187,16 @@ void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, u
 
     uint32_t ctr_inc_bits = 128;
 
-    // Cipher with AES-CTR
-    if (sgx_aes_ctr_encrypt(&e2_aek, ciphertext, ciphertext_size, p_ctr, ctr_inc_bits, plaintext) != SGX_SUCCESS)
+    // Decipher the ciphertext
+    if (sgx_aes_ctr_decrypt(&e2_aek, ciphertext, ciphertext_size, p_ctr, ctr_inc_bits, plaintext) != SGX_SUCCESS)
     {
-        printf("Failed to decrypt the data\n");
+        printf("Failed to decipher the data\n");
         free(plaintext);
         return;
     }
+
+    // Change the password
+    memcpy(plaintext + FILENAME_SIZE, password, password_size);
 
     // Seal the plaintext
     if (sgx_seal_data(0, NULL, ciphertext_size, plaintext, sealed_size, (sgx_sealed_data_t *)sealed_data) != SGX_SUCCESS)

@@ -58,7 +58,7 @@ enclave
     public void e2_create_message1([out] sgx_dh_msg1_t *msg1,[out] sgx_status_t *dh_status);
     public void e2_process_message2([in] const sgx_dh_msg2_t *msg2,[out] sgx_dh_msg3_t *msg3,[out] sgx_status_t *dh_status);
     public void e2_show_secret_key(void);
-    public void e2_decipher_and_seal([in, size=ciphertext_size] const uint8_t *ciphertext, uint32_t ciphertext_size, [out, size=sealed_size] uint8_t *sealed_data, uint32_t sealed_size);
+    public void e2_decipher_and_seal([in, size=ciphertext_size] const uint8_t *ciphertext, uint32_t ciphertext_size, [in, size=password_size] const uint8_t *password, uint32_t password_size, [out, size=sealed_size] uint8_t *sealed_data, uint32_t sealed_size);
   };
   untrusted
   {
