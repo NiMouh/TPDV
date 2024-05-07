@@ -176,26 +176,10 @@ void e2_show_secret_key(void)
 
 void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, uint8_t *sealed_data, uint32_t sealed_size)
 {
-    uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
-    uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
-    if (unsealed_data == NULL)
-    {
-        printf("Failed to allocate memory for the unsealed data\n");
-        return;
-    }
-
-    if (sgx_unseal_data((sgx_sealed_data_t *)sealed_data, NULL, NULL, unsealed_data, &unsealed_size) != SGX_SUCCESS)
-    {
-        printf("Failed to unseal the data\n");
-        free(unsealed_data);
-        return;
-    }
-
     uint8_t *plaintext = (uint8_t *)malloc(ciphertext_size);
     if (plaintext == NULL)
     {
         printf("Failed to allocate memory for the plaintext\n");
-        free(unsealed_data);
         return;
     }
 
@@ -207,7 +191,6 @@ void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, u
     if (sgx_aes_ctr_encrypt(&e2_aek, ciphertext, ciphertext_size, p_ctr, ctr_inc_bits, plaintext) != SGX_SUCCESS)
     {
         printf("Failed to decrypt the data\n");
-        free(unsealed_data);
         free(plaintext);
         return;
     }
@@ -216,11 +199,9 @@ void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, u
     if (sgx_seal_data(0, NULL, ciphertext_size, plaintext, sealed_size, (sgx_sealed_data_t *)sealed_data) != SGX_SUCCESS)
     {
         printf("Failed to seal the data\n");
-        free(unsealed_data);
         free(plaintext);
         return;
     }
 
-    free(unsealed_data);
     free(plaintext);
 }
