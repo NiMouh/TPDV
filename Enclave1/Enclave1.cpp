@@ -70,11 +70,61 @@ void e1_check_password(const uint8_t *password, uint32_t password_size, const ui
         return;
     }
 
-    if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) != 0)
+    if (strcmp((char *)password, (char *)unsealed_data + FILENAME_SIZE) == 0)
     {
-        printf("The password is incorrect.\n");
+        *result = 1;
     }
-    else
+
+    free(unsealed_data);
+}
+
+void e1_check_nonce(const uint8_t *sealed_data, uint32_t sealed_size, int *result)
+{
+    uint32_t unsealed_size = sgx_get_encrypt_txt_len((const sgx_sealed_data_t *)sealed_data);
+    uint8_t *unsealed_data = (uint8_t *)malloc(unsealed_size);
+    if (unsealed_data == NULL)
+    {
+        printf("Failed to allocate memory for the unsealed data\n");
+        return;
+    }
+
+    if (sgx_unseal_data((sgx_sealed_data_t *)sealed_data, NULL, NULL, unsealed_data, &unsealed_size) != SGX_SUCCESS)
+    {
+        printf("Failed to unseal the data\n");
+        free(unsealed_data);
+        return;
+    }
+
+    sgx_sha256_hash_t hash_result;
+    sgx_sha_state_handle_t sha_handle = NULL;
+    if (sgx_sha256_init(&sha_handle) != SGX_SUCCESS)
+    {
+        printf("Failed to initialize the SHA256\n");
+        free(unsealed_data);
+        return;
+    }
+
+    if (sgx_sha256_update(unsealed_data + HEADER_SIZE, unsealed_size - HEADER_SIZE, sha_handle) != SGX_SUCCESS)
+    {
+        printf("Failed to hash the assets\n");
+        free(unsealed_data);
+        return;
+    }
+
+    if (sgx_sha256_get_hash(sha_handle, &hash_result) != SGX_SUCCESS)
+    {
+        printf("Failed to get the hash\n");
+        free(unsealed_data);
+        return;
+    }
+
+    uint32_t nonce = 0;
+    memcpy(&nonce, hash_result, NONCE_SIZE);
+
+    uint32_t stored_nonce = 0;
+    memcpy(&stored_nonce, unsealed_data + HEADER_SIZE - NONCE_SIZE, NONCE_SIZE);
+
+    if (nonce == stored_nonce)
     {
         *result = 1;
     }
@@ -436,32 +486,31 @@ static sgx_dh_session_t e1_session;
 static sgx_key_128bit_t e1_aek; // Agreement Encryption Key
 static sgx_dh_session_enclave_identity_t e1_responder_identity;
 
-
 // step 1
 void e1_init_session(sgx_status_t *dh_status)
 {
-  *dh_status = sgx_dh_init_session(SGX_DH_SESSION_INITIATOR,&e1_session);
+    *dh_status = sgx_dh_init_session(SGX_DH_SESSION_INITIATOR, &e1_session);
 }
 
 // step 5
-void e1_process_message1(const sgx_dh_msg1_t *msg1,sgx_dh_msg2_t *msg2,sgx_status_t *dh_status)
+void e1_process_message1(const sgx_dh_msg1_t *msg1, sgx_dh_msg2_t *msg2, sgx_status_t *dh_status)
 {
-  *dh_status = sgx_dh_initiator_proc_msg1(msg1,msg2,&e1_session);
+    *dh_status = sgx_dh_initiator_proc_msg1(msg1, msg2, &e1_session);
 }
 
 // step 9
-void e1_process_message3(const sgx_dh_msg3_t *msg3,sgx_status_t *dh_status)
+void e1_process_message3(const sgx_dh_msg3_t *msg3, sgx_status_t *dh_status)
 {
-  *dh_status = sgx_dh_initiator_proc_msg3(msg3,&e1_session,&e1_aek,&e1_responder_identity);
+    *dh_status = sgx_dh_initiator_proc_msg3(msg3, &e1_session, &e1_aek, &e1_responder_identity);
 }
 
 // show key
 void e1_show_secret_key(void)
 {
-  printf("Enclave 1 AEK:");
-  for(int i = 0;i < 16;i++)
-    printf(" %02X",0xFF & (int)e1_aek[i]);
-  printf("\n");
+    printf("Enclave 1 AEK:");
+    for (int i = 0; i < 16; i++)
+        printf(" %02X", 0xFF & (int)e1_aek[i]);
+    printf("\n");
 }
 
 void e1_unseal_and_cipher(const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *ciphertext, uint32_t ciphertext_size)
@@ -481,7 +530,7 @@ void e1_unseal_and_cipher(const uint8_t *sealed_data, uint32_t sealed_size, uint
         return;
     }
 
-    uint8_t p_ctr[16] = {0}; 
+    uint8_t p_ctr[16] = {0};
 
     uint32_t ctr_inc_bits = 128;
 

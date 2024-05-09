@@ -214,6 +214,8 @@ static bool read_file_to_buf(const char *filename, uint8_t *buf, uint32_t bsize)
     std::cout << "Failed to read the file \"" << path << "\"" << std::endl;
     return false;
   }
+  ifs.close();
+
   return true;
 }
 
@@ -401,6 +403,20 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
   }
 
   int result = 0;
+  if ((status = e1_check_nonce(global_eid1, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_nonce");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The integrity of the vault has been compromised\n");
+    free(sealed_data);
+    return 1;
+  }
+
   if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
     print_error_message(status, "check_password");
@@ -410,7 +426,7 @@ int add_asset(const uint8_t *filename, const uint8_t *password, const uint8_t *a
 
   if (!result)
   {
-    fprintf(stderr, "The password is incorrect\n");
+    fprintf(stderr, "The credentials are invalid\n");
     free(sealed_data);
     return 1;
   }
@@ -498,6 +514,20 @@ int list_all_assets(const uint8_t *filename, const uint8_t *password)
   }
 
   int result = 0;
+  if ((status = e1_check_nonce(global_eid1, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_nonce");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The integrity of the vault has been compromised\n");
+    free(sealed_data);
+    return 1;
+  }
+
   if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
     print_error_message(status, "check_password");
@@ -620,6 +650,20 @@ int retrieve_asset(const uint8_t *filename, const uint8_t *password, const uint8
   }
 
   int result = 0;
+  if ((status = e1_check_nonce(global_eid1, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_nonce");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The integrity of the vault has been compromised\n");
+    free(sealed_data);
+    return 1;
+  }
+
   if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
     print_error_message(status, "check_password");
@@ -718,6 +762,20 @@ int change_password(const uint8_t *filename, const uint8_t *old_password, const 
   }
 
   int result = 0;
+  if ((status = e1_check_nonce(global_eid1, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_nonce");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The integrity of the vault has been compromised\n");
+    free(sealed_data);
+    return 1;
+  }
+
   if ((status = e1_check_password(global_eid1, old_password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
     print_error_message(status, "check_password");
@@ -804,6 +862,20 @@ int check_asset_integrity(const uint8_t *filename, const uint8_t *password, cons
   }
 
   int result = 0;
+  if ((status = e1_check_nonce(global_eid1, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_nonce");
+    free(sealed_data);
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The integrity of the vault has been compromised\n");
+    free(sealed_data);
+    return 1;
+  }
+
   if ((status = e1_check_password(global_eid1, password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
     print_error_message(status, "check_password");
@@ -903,8 +975,19 @@ int clone_tpdv(const uint8_t *original_tpdv, const uint8_t *original_password, c
     return 1;
   }
 
-  // Check the password of the original tpdv
   int result = 0;
+  if ((status = e1_check_nonce(global_eid1, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
+  {
+    print_error_message(status, "check_nonce");
+    return 1;
+  }
+
+  if (!result)
+  {
+    fprintf(stderr, "The integrity of the vault has been compromised\n");
+    return 1;
+  }
+
   if ((status = e1_check_password(global_eid1, original_password, PASSWORD_SIZE, sealed_data, sealed_size, &result)) != SGX_SUCCESS)
   {
     print_error_message(status, "check_password");
@@ -1223,7 +1306,7 @@ int SGX_CDECL main(int argc, char *argv[])
 
       // Choose the enclave and wait for the user to press ENTER
       printf("Choose the enclave to list the assets (default is enclave 1): ");
-      if(scanf("%d", &choosen_enclave) != 1)
+      if (scanf("%d", &choosen_enclave) != 1)
       {
         printf("Error: Invalid input. Please enter a number.\n");
         while (getchar() != '\n') // Clear the input buffer

@@ -51,6 +51,7 @@ enclave {
         public uint32_t get_sealed_data_size(uint32_t plaintext_len);
 
         public void e1_check_password([in, size=password_size] const uint8_t *password, uint32_t password_size, [in, size=sealed_size] const uint8_t *sealed_data, uint32_t sealed_size, [out] int *result);
+        public void e1_check_nonce([in, size=sealed_size] const uint8_t *sealed_data, uint32_t sealed_size, [out] int *result);
         public void e1_add_asset([in, size=asset_filename_size] const uint8_t *asset_filename, uint32_t asset_filename_size, [in, size=sealed_size] const uint8_t *sealed_data, uint32_t sealed_size, [in, size=asset_size] const uint8_t *asset, uint32_t asset_size, [out, size=new_sealed_size] uint8_t *new_sealed_data, uint32_t new_sealed_size);
         public void e1_list_all_assets([in, size=sealed_size] const uint8_t *sealed_data, uint32_t sealed_size);
         public void e1_get_asset_size([in, size=asset_filename_size] const uint8_t *asset_filename, uint32_t asset_filename_size, [in, size=sealed_size] const uint8_t *sealed_data, uint32_t sealed_size, [out] uint32_t *asset_size);
