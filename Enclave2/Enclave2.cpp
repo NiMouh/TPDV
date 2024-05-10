@@ -1,3 +1,14 @@
+/**
+ * @file Enclave2.cpp
+ * 
+ * @brief The file contains the implementation of the functions that are called inside the enclave.
+ * 
+ * The file contains the implementation of the functions that are called inside the enclave.
+ * 
+ * @author João Almeida  (118340)
+ *         Simão Andrade (118345)
+*/
+
 #include <stdarg.h>
 #include <stdio.h> /* vsnprintf */
 

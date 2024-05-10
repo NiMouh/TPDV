@@ -5,8 +5,8 @@
  *
  * This file contains the main application logic for the TPDV system using Intel SGX.
  *
- * @author Simão Andrade (118345)
- *         João Almeida (118340)
+ * @author João Almeida  (118340)
+ *         Simão Andrade (118345)
  */
 
 #include <time.h>

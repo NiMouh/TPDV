@@ -17,8 +17,8 @@ extern "C"
  *
  * This file contains the functions and variables used by Enclave 1.
  *
- * @author Simão Andrade (118345)
- *         João Almeida  (118340)
+ * @author João Almeida  (118340)
+ *         Simão Andrade (118345)
  * @see Enclave1.cpp
  */
 
@@ -254,18 +254,16 @@ extern "C"
     void e1_change_password(const uint8_t *old_password, uint32_t old_password_size, const uint8_t *new_password, uint32_t new_password_size, const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *new_sealed_data, uint32_t new_sealed_size);
 
     /**
-     * @brief Change the creator of the vault
-     *
-     * @details This function changes the creator of the vault by unsealing the data, changing the creator, and sealing the data again.
-     *
-     * @param old_creator The old creator
-     * @param old_creator_size The size of the old creator
-     * @param new_creator The new creator
-     * @param new_creator_size The size of the new creator
+     * @brief Obtain the hash of one asset in the vault
+     * 
+     * @details This function obtains the hash of one asset in the vault by unsealing the data, iterating through the assets, and hashing the asset content.
+     * 
+     * @param asset_filename The filename of the asset
+     * @param asset_filename_size The size of the asset filename
      * @param sealed_data The sealed data containing the assets
      * @param sealed_size The size of the sealed data
-     * @param new_sealed_data The sealed data with the new creator
-     * @param new_sealed_size The size of the new sealed data
+     * @param hash A pointer to the buffer to store the asset hash
+     * @param hash_size The size of the hash buffer
      */
     void e1_get_asset_hash_from_vault(const uint8_t *asset_filename, uint32_t asset_filename_size, const uint8_t *sealed_data, uint32_t sealed_size, uint8_t *hash, uint32_t hash_size);
 

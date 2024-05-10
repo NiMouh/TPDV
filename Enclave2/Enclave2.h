@@ -30,25 +30,25 @@ extern "C"
      *
      * @brief This file contains the declarations of the functions that are used in Enclave2.cpp
      *
-     * @author Simão Andrade (118345)
-     *         João Almeida (118340)
-     * 
+     * @author João Almeida  (118340)
+     *         Simão Andrade (118345)
+     *
      * @see Enclave2.cpp
      */
 
-    /** 
+    /**
      * @brief Prints a formatted string to the standard output using a OCALL to the untrusted side
-     * 
+     *
      * @param fmt The format string
      * @param ... The arguments to be printed
-     * 
+     *
      * @return The number of characters printed
      */
     int printf(const char *fmt, ...);
 
     /**
      * @brief Lists all the assets in the vault
-     * 
+     *
      * @param sealed_data The sealed data
      * @param sealed_size The size of the sealed data
      */
@@ -56,7 +56,7 @@ extern "C"
 
     /**
      * @brief Adds an asset to the vault
-     * 
+     *
      * @param sealed_data The sealed data
      * @param sealed_size The size of the sealed data
      * @param asset_name The name of the asset
@@ -67,14 +67,14 @@ extern "C"
 
     /**
      * @brief Initializes the session for the Diffie-Hellman key exchange
-     * 
+     *
      * @param dh_status The status of the Diffie-Hellman key exchange
      */
     void e2_init_session(sgx_status_t *dh_status);
 
     /**
      * @brief Generates the first message of the Diffie-Hellman key exchange
-     * 
+     *
      * @param msg1 The first message
      * @param dh_status The status of the Diffie-Hellman key exchange
      */
@@ -82,13 +82,13 @@ extern "C"
 
     /**
      * @brief Processes the second message of the Diffie-Hellman key exchange
-     * 
+     *
      * @param msg2 The second message
      * @param msg3 The third message
      * @param dh_status The status of the Diffie-Hellman key exchange
      */
     void e2_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_status_t *dh_status);
-    
+
     /**
      * @brief Shows the secret key
      */
@@ -96,7 +96,7 @@ extern "C"
 
     /**
      * @brief Deciphers and seals the data
-     * 
+     *
      * @param ciphertext The ciphertext
      * @param ciphertext_size The size of the ciphertext
      * @param password The password

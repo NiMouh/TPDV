@@ -42,8 +42,8 @@ extern "C"
      *
      * @brief This file contains the definitions of the functions used in the Application
      *
-     * @author Simão Andrade (118345)
-     *         João Almeida (118340)
+     * @author João Almeida  (118340)
+     *         Simão Andrade (118345)
      */
 
     /**

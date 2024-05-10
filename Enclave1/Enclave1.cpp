@@ -10,8 +10,8 @@
  * - FUNCTIONALITY FUNCTIONS
  * - KEY EXCHANGE ECALLs
  * 
- * @author Simão Andrade (118345)
- *         João Almeida (118340)
+ * @author João Almeida  (118340)
+ *         Simão Andrade (118345)
  */
 
 #include <stdarg.h>
