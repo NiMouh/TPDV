@@ -1,35 +1,3 @@
-/*
- * Copyright (C) 2011-2018 Intel Corporation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-
 #ifndef _ENCLAVE2_H_
 #define _ENCLAVE2_H_
 
@@ -37,36 +5,106 @@
 #include <assert.h>
 #include "sgx_dh.h"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 /* Hashes */
 #define SHA256_DIGEST_LENGTH 32
 
 /* TPDV SIZES */
-#define FILENAME_SIZE 20 // bytes
-#define CREATOR_SIZE 20  // bytes
-#define PASSWORD_SIZE 20 // bytes
-#define NONCE_SIZE 4 // bytes
-#define ASSETS_SIZE 4 // bytes
+#define FILENAME_SIZE 20                                                                      // bytes
+#define CREATOR_SIZE 20                                                                       // bytes
+#define PASSWORD_SIZE 20                                                                      // bytes
+#define NONCE_SIZE 4                                                                          // bytes
+#define ASSETS_SIZE 4                                                                         // bytes
 #define HEADER_SIZE (FILENAME_SIZE + CREATOR_SIZE + PASSWORD_SIZE + ASSETS_SIZE + NONCE_SIZE) // bytes
-#define MAX_ASSETS 16000 // 16MB / 1KB = 16K assets
+#define MAX_ASSETS 16000                                                                      // 16MB / 1KB = 16K assets
 
 /* ASSET SIZES */
 #define ASSETNAME_SIZE 20 // bytes
 
-int printf(const char *fmt, ...);
+#if defined(__cplusplus)
+extern "C"
+{
+#endif
 
-void e2_list_all_assets(const uint8_t *sealed_data, uint32_t sealed_size);
-void e2_check_password(const uint8_t *password, uint32_t password_size, const uint8_t *sealed_data, uint32_t sealed_size, int *result);
+    /**
+     * @file Enclave2.h
+     *
+     * @brief This file contains the declarations of the functions that are used in Enclave2.cpp
+     *
+     * @author Simão Andrade (118345)
+     *         João Almeida (118340)
+     * 
+     * @see Enclave2.cpp
+     */
 
-void e2_init_session(sgx_status_t *dh_status);
-void e2_generate_message1(sgx_dh_msg1_t *msg1,sgx_status_t *dh_status);
-void e2_process_message2(const sgx_dh_msg2_t *msg2,sgx_dh_msg3_t *msg3,sgx_status_t *dh_status);
-void e2_show_secret_key(void);
+    /** 
+     * @brief Prints a formatted string to the standard output using a OCALL to the untrusted side
+     * 
+     * @param fmt The format string
+     * @param ... The arguments to be printed
+     * 
+     * @return The number of characters printed
+     */
+    int printf(const char *fmt, ...);
 
-void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, const uint8_t *password, uint32_t password_size, uint8_t *sealed_data, uint32_t sealed_size);
+    /**
+     * @brief Lists all the assets in the vault
+     * 
+     * @param sealed_data The sealed data
+     * @param sealed_size The size of the sealed data
+     */
+    void e2_list_all_assets(const uint8_t *sealed_data, uint32_t sealed_size);
+
+    /**
+     * @brief Adds an asset to the vault
+     * 
+     * @param sealed_data The sealed data
+     * @param sealed_size The size of the sealed data
+     * @param asset_name The name of the asset
+     * @param asset_content The content of the asset
+     * @param asset_size The size of the asset
+     */
+    void e2_check_password(const uint8_t *password, uint32_t password_size, const uint8_t *sealed_data, uint32_t sealed_size, int *result);
+
+    /**
+     * @brief Initializes the session for the Diffie-Hellman key exchange
+     * 
+     * @param dh_status The status of the Diffie-Hellman key exchange
+     */
+    void e2_init_session(sgx_status_t *dh_status);
+
+    /**
+     * @brief Generates the first message of the Diffie-Hellman key exchange
+     * 
+     * @param msg1 The first message
+     * @param dh_status The status of the Diffie-Hellman key exchange
+     */
+    void e2_generate_message1(sgx_dh_msg1_t *msg1, sgx_status_t *dh_status);
+
+    /**
+     * @brief Processes the second message of the Diffie-Hellman key exchange
+     * 
+     * @param msg2 The second message
+     * @param msg3 The third message
+     * @param dh_status The status of the Diffie-Hellman key exchange
+     */
+    void e2_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_status_t *dh_status);
+    
+    /**
+     * @brief Shows the secret key
+     */
+    void e2_show_secret_key(void);
+
+    /**
+     * @brief Deciphers and seals the data
+     * 
+     * @param ciphertext The ciphertext
+     * @param ciphertext_size The size of the ciphertext
+     * @param password The password
+     * @param password_size The size of the password
+     * @param sealed_data The sealed data
+     * @param sealed_size The size of the sealed data
+     */
+    void e2_decipher_and_seal(const uint8_t *ciphertext, uint32_t ciphertext_size, const uint8_t *password, uint32_t password_size, uint8_t *sealed_data, uint32_t sealed_size);
 
 #if defined(__cplusplus)
 }

@@ -9,8 +9,7 @@
 #include "Enclave2_t.h" /* e1_print_string */
 
 /*
- * printf:
- *   Invokes OCALL to display the enclave buffer to the terminal.
+ * OCALL
  */
 int printf(const char *fmt, ...)
 {
@@ -25,7 +24,7 @@ int printf(const char *fmt, ...)
 }
 
 /*
- * ECALL (it just prints a string)
+ * ECALL's
  */
 
 /* SEAL/UNSEAL FUNCTIONS */

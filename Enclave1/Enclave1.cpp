@@ -1,3 +1,19 @@
+/**
+ * @file Enclave1.cpp
+ * 
+ * @brief Enclave1 source file
+ * 
+ * This file contains the implementation of the Enclave1 functions.
+ * 
+ * The Enclave1 is responsible for the following functionalities:
+ * - SEAL/UNSEAL FUNCTIONS
+ * - FUNCTIONALITY FUNCTIONS
+ * - KEY EXCHANGE ECALLs
+ * 
+ * @author Simão Andrade (118345)
+ *         João Almeida (118340)
+ */
+
 #include <stdarg.h>
 #include <stdio.h> /* vsnprintf */
 
@@ -9,8 +25,9 @@
 #include "Enclave1_t.h" /* e1_print_string */
 
 /*
- * printf: Invokes OCALL to display the enclave buffer to the terminal.
- */
+ * OCALLs 
+*/
+
 int printf(const char *fmt, ...)
 {
     char buf[BUFSIZ] = {'\0'};
@@ -482,10 +499,6 @@ void e1_get_asset_hash_from_vault(const uint8_t *asset_filename, uint32_t asset_
 
 /* KEY EXCHANGE ECALLs */
 
-static sgx_dh_session_t e1_session;
-static sgx_key_128bit_t e1_aek; // Agreement Encryption Key
-static sgx_dh_session_enclave_identity_t e1_responder_identity;
-
 // step 1
 void e1_init_session(sgx_status_t *dh_status)
 {
@@ -504,7 +517,6 @@ void e1_process_message3(const sgx_dh_msg3_t *msg3, sgx_status_t *dh_status)
     *dh_status = sgx_dh_initiator_proc_msg3(msg3, &e1_session, &e1_aek, &e1_responder_identity);
 }
 
-// show key
 void e1_show_secret_key(void)
 {
     printf("Enclave 1 AEK:");

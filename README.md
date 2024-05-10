@@ -30,7 +30,7 @@ O cabeçalho do ficheiro é composto por:
   <i>Fig. 1 - Header do TPDV</i>
 </p>
 
-> **Nota:** O campo `NONCE` representa os últimos 4 bytes do hash de todos os assets
+> **Nota:** O campo `NONCE` representa os últimos 4 bytes do hash de todos os assets. Este é usado para verificar a integridade do TPDV, adicionando uma nova camada de segurança.
 
 Cada ficheiro adicionado ao TPDV é composto por:
 
@@ -42,11 +42,11 @@ Cada ficheiro adicionado ao TPDV é composto por:
   <i>Fig. 2 - Estrutura de um arquivo no TPDV</i>
 </p>
 
-### Funções
+### Arquitetura do Programa
 
 O programa é dividido em **dois tipos** de funções:
-- Funções **seguras**: são executadas dentro do enclave e têm acesso a memória selada.
-- Funções **não seguras**: são executadas fora do enclave e têm acesso a memória não selada. 
+- **Seguras**: são executadas dentro do enclave e têm acesso a memória selada.
+- **Não seguras**: são executadas fora do enclave e têm acesso a memória não selada. 
 
 | Funções seguras                | Funções não seguras     |
 | ------------------------------ | ----------------------- |
@@ -63,9 +63,11 @@ O programa é dividido em **dois tipos** de funções:
 | `e1_unseal_and_cipher`         |                         |
 | `e1_decipher_and_seal`         |                         |
 
-#### `create_tpdv`
+### Funcionalidades
 
-Esta funcionalidade é responsável por criar um ficheiro TPDV. O ficheiro é criado com o cabeçalho do TPDV e sem arquivos.
+#### Criação do TPDV
+
+Esta funcionalidade é responsável por criar um ficheiro TPDV. O ficheiro é criado com o cabeçalho do TPDV conforme o descrito anteriormente e sem arquivos.
 
 A função no `App.cpp` tem o seguinte cabeçalho:
 ```c
@@ -74,7 +76,9 @@ int create_tpdv(const uint8_t *filename,const uint32_t filename_size,const uint8
 
 E devolve `0` em caso de sucesso e `1` em caso de erro.
 
-#### `add_asset`
+> Nesta implementação, a criação do TPDV é toda feita fora do enclave.
+
+#### Adicionar um arquivo ao TPDV
 
 Esta funcionalidade é responsável por adicionar um ficheiro ao TPDV. O ficheiro é adicionado ao array TDPV, sendo novamente selado e guardado no ficheiro.
 
@@ -96,9 +100,11 @@ Este fluxo é ilustrado usando a seguinte figura:
   <i>Fig. 3 - Adicionar um ficheiro ao TPDV</i>
 </p>
 
-#### `list_assets`
+> O processo de manipulação do ficheiro TPDV é feito **dentro do enclave** de modo a garantir que a informação é manipulada apenas pela informação fornecida pela aplicação cliente. Deste modo a integridade da informação é garantida, uma vez que a informação é selada e não pode ser alterada fora do enclave sem que seja detetado.
 
-Esta funcionalidade é responsável por enumerar todos os ficheiros no TPDV. A função dá *unseal* ao TPDV e lê o conteúdo do array, enviando o resultado para o `stdout`.
+#### Listar os arquivos no TPDV
+
+Esta funcionalidade é responsável por enumerar todos os ficheiros no TPDV. A função dá *unseal* ao TPDV e lê o conteúdo do array, enviando o resultado para o `stdout` através de um OCALL para a aplicação cliente.
 
 A função no `App.cpp` tem o seguinte cabeçalho:
 ```c
@@ -118,7 +124,7 @@ Este fluxo é ilustrado usando a seguinte figura:
   <i>Fig. 4 - Listar os ficheiros no TPDV</i>
 </p>
 
-#### `change_password`
+#### Alterar as credênciais do TPDV
 
 Esta funcionalidade é responsável por alterar a password do TPDV. A função dá *unseal* ao TPDV, verifica a password antiga, altera a password, dá *seal* ao TPDV e guarda o conteúdo no ficheiro.
 
@@ -140,7 +146,7 @@ Este fluxo é ilustrado usando a seguinte figura:
   <i>Fig. 5 - Alterar a password do TPDV</i>
 </p>
 
-#### `check_asset_integrity`
+#### Verificar a integridade de um ficheiro no TPDV
 
 Esta funcionalidade é responsável por verificar a integridade de um ficheiro no TPDV. A função dá lê o conteúdo do ficheiro, dá *unseal* ao TPDV e verifica se o hash do ficheiro corresponde ao hash do conteúdo guardado no TPDV.
 
@@ -162,7 +168,7 @@ Este fluxo é ilustrado usando a seguinte figura:
   <i>Fig. 5 - Verificar a integridade de um ficheiro no TPDV</i>
 </p>
 
-#### `retrieve_asset`
+#### Extrair um ficheiro do TPDV
 
 Esta funcionalidade é responsável por extrair um ficheiro do TPDV. A função dá *unseal* ao TPDV, procura o ficheiro e devolve o conteúdo do ficheiro.
 
@@ -184,7 +190,7 @@ Este fluxo é ilustrado usando a seguinte figura:
   <i>Fig. 5 - Extrair um ficheiro do TPDV</i>
 </p>
 
-### `clone_tpdv`
+#### Copiar o TPDV para outro enclave
 
 Esta funcionalidade é responsável por clonar o TPDV para outro enclave.
 
@@ -224,6 +230,162 @@ Este fluxo é ilustrado usando a seguinte figura:
   <i>Fig. 7 - Clonar o TPDV</i>
 </p>
 
+## Testes e Resultados
+
+Aqui é apresentadas as verificações que foram feitas ao funcionamento do programa, bem como os resultados obtidos.
+
+<p align="center">
+  <img src="img/teste_menu.png" alt="Menu do programa" width="1000"/>
+</p>
+<p align="center">
+  <i>Fig. 8 - Menu do programa</i>
+</p>
+
+### Resultado da Manipulação do TPDV
+
+Dentro do enclave, o TPDV é manipulado de forma segura, garantindo a integridade dos ficheiros. Caso o TPDV seja manipulado fora do enclave, o programa deteta a adulteração, pois é feita a verificação do hash dos arquivos.
+
+Neste teste foi alterado apenas um byte do ficheiro TPDV.
+
+<p align="center">
+  <img src="img/teste_manipulacao.png" alt="Resultado da manipulação do TPDV" width="900"/>
+</p>
+<p align="center">
+  <i>Fig. 9 - Resultado da manipulação do TPDV usando o VIM</i>
+</p>
+
+Devolvendo a seguinte mensagem de erro:
+
+<p align="center">
+  <img src="img/teste_manipulacao2.png" alt="Resultado da manipulação do TPDV" width="450"/>
+</p>
+<p align="center">
+  <i>Fig. 10 - Resultado da manipulação do TPDV</i>
+</p>
+
+> Esta verificação provém do `check_nonce_integrity`.
+
+### Listagem de ficheiros
+
+Todos os ficheiros presentes no TPDV podem ser listados, referindo o nome e o tamanho dos ficheiros.
+
+Esta funcionalidade requer autenticação, sendo necessário fornecer a credencial do TPDV.
+
+<p align="center">
+  <img src="img/teste_lista.png" alt="Listagem de ficheiros" width="400"/>
+</p>
+<p align="center">
+  <i>Fig. 11 - Listagem de ficheiros</i>
+</p>
+
+Obtendo o seguinte resultado:
+
+<p align="center">
+  <img src="img/teste_lista2.png" alt="Listagem de ficheiros" width="900"/>
+</p>
+<p align="center">
+  <i>Fig. 12 - Listagem de ficheiros</i>
+</p>
+
+### Alteração das credênciais do TPDV
+
+As credenciais do TPDV podem ser alteradas, sendo necessário fornecer a credencial atual e a nova credencial.
+
+<p align="center">
+  <img src="img/teste_credenciais.png" alt="Alteração das credênciais do TPDV" width="440"/>
+</p>
+<p align="center">
+  <i>Fig. 13 - Alteração das credênciais do TPDV</i>
+</p>
+
+Dando a seguinte mensagem de sucesso:
+
+<p align="center">
+  <img src="img/teste_credenciais2.png" alt="Alteração das credênciais do TPDV" width="400"/>
+</p>
+<p align="center">
+  <i>Fig. 14 - Mensagem de sucesso na alteração das credênciais do TPDV</i>
+</p>
+
+Caso o utilizador insira a credencial antiga, o programa devolve a seguinte mensagem de erro:
+
+<p align="center">
+  <img src="img/teste_credenciais3.png" alt="Alteração das credênciais do TPDV" width="500"/>
+</p>
+<p align="center">
+  <i>Fig. 15 - Mensagem de erro na alteração das credênciais do TPDV</i>
+</p>
+
+### Validação da integridade dos ficheiros
+
+Qualquer arquivo presente no TPDV pode ser validado, verificando se o hash do arquivo corresponde ao hash guardado no TPDV.
+
+<p align="center">
+  <img src="img/teste_integridade.png" alt="Validação da integridade dos ficheiros" width="900"/>
+</p>
+<p align="center">
+  <i>Fig. 16 - Validação da integridade dos ficheiros</i>
+</p>
+
+Caso seja adulterado parte do ficheiro, o programa irá detetar a adulteração.
+
+<p align="center">
+  <img src="img/teste_integridade2.png" alt="Validação da integridade dos ficheiros" width="300"/>
+</p>
+<p align="center">
+  <i>Fig. 17 - Adulteração de um arquivo no TPDV</i>
+</p>
+
+E será devolvida a seguinte mensagem de erro:
+<p align="center">
+  <img src="img/teste_integridade3.png" alt="Validação da integridade dos ficheiros" width="900"/>
+</p>
+<p align="center">
+  <i>Fig. 18 - Mensagem de erro na validação da integridade dos ficheiros</i>
+</p>
+
+### Clonagem do TPDV (falta adicionar as imagens)
+
+Para clonar o TPDV, é necessário fornecer as credenciais do TPDV de origem e de destino.
+
+<p align="center">
+  <img src="img/teste_clone.png" alt="Clonagem do TPDV" width="900"/>
+</p>
+<p align="center">
+  <i>Fig. 19 - Clonagem do TPDV</i>
+</p>
+
+Dando a seguinte mensagem de sucesso:
+
+<p align="center">
+  <img src="img/teste_clone2.png" alt="Clonagem do TPDV" width="400"/>
+</p>
+<p align="center">
+  <i>Fig. 20 - Mensagem de sucesso na clonagem do TPDV</i>
+</p>
+
+Criando um novo ficheiro TPDV com o mesmo conteúdo do ficheiro original. No momento, o utilizador pode apenas listar os ficheiros presentes no TPDV clonado.
+
+<p align="center">
+  <img src="img/teste_clone3.png" alt="Clonagem do TPDV" width="900"/>
+</p>
+<p align="center">
+  <i>Fig. 21 - Listagem de ficheiros do TPDV clonado</i>
+</p>
+
+## Documentação
+
+A documentação do código foi feita com o Doxygen. Para gerar a documentação, basta executar o seguinte comando:
+
+```bash
+$ doxygen Doxyfile
+```
+
+Onde a documentação será gerada na pasta `docs/`.
+
+> [!NOTE]
+> Não foi adicionada, pois o Doxygen não se encontra presente na máquina de desenvolvimento.
+
 ## Execução
 
 Para compilar o programa, basta executar os seguintes comandos:
@@ -233,8 +395,18 @@ $ make
 $ ./app
 ```
 
+> [!IMPORTANT]
+> Deve ser gerado um novo par de chaves RSA para o enclave, para isso basta executar o script `new_private_key.bash`.
+
 ## Conclusão
 
 > [!NOTE] 
 > Not chatgpt shit, falar realmente que objetivos atingimos, como foi a experiencia, o que aprendemos e o que podiamos ter melhorado (ou será melhorado nos próximos trabalhos), seja a nível de organizacional, ou a nível técnico.
 
+## Referências
+
+[Overview of Intel SGX Enclave - by Intel](https://www.intel.com/content/dam/develop/external/us/en/documents/overview-of-intel-sgx-enclave-637284.pdf)
+
+[Repositório Github do Intel SGX](https://github.com/intel/linux-sgx)
+
+[Repositório Exemplo: HelloEnclave](https://github.com/digawp/hello-enclave)
