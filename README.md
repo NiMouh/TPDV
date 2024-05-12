@@ -208,7 +208,7 @@ Para clonar o TPDV de forma segura, foi feita uma troca de mensagens entre os do
   <i>Fig. 6 - Troca de chaves c/ SGX enclaves</i>
 </p>
 
-Basicamente:
+Na prática:
 1. `e1_init_session` (Enclave 1): Enclave 1 começa o processo de troca de chave, inicializando uma sessão Diffie-Hellman.
 2. `e2_init_session` (Enclave 2): Enclave 2 também inicia sua sessão Diffie-Hellman.
 3. `e2_create_message1` (Enclave 2): Enclave 2 gera a primeira mensagem que contém informações para a troca de chave.
@@ -344,33 +344,47 @@ E será devolvida a seguinte mensagem de erro:
   <i>Fig. 18 - Mensagem de erro na validação da integridade dos ficheiros</i>
 </p>
 
-### Clonagem do TPDV (falta adicionar as imagens)
+### Clonagem do TPDV 
 
 Para clonar o TPDV, é necessário fornecer as credenciais do TPDV de origem e de destino.
 
 <p align="center">
-  <img src="img/teste_clone.png" alt="Clonagem do TPDV" width="900"/>
+  <img src="img/teste_clone.png" alt="Autenticação do TPDV a Clonar" width="400"/>
 </p>
 <p align="center">
-  <i>Fig. 19 - Clonagem do TPDV</i>
+  <i>Fig. 19 - Autenticação do TPDV a Clonar</i>
+</p>
+
+<p align="center">
+  <img src="img/teste_clone1.png" alt="Clonagem do TPDV" width="400"/>
+</p>
+<p align="center">
+  <i>Fig. 20 - Clonagem do TPDV</i>
 </p>
 
 Dando a seguinte mensagem de sucesso:
 
 <p align="center">
-  <img src="img/teste_clone2.png" alt="Clonagem do TPDV" width="400"/>
+  <img src="img/teste_clone2.png" alt="Clonagem do TPDV" width="300"/>
 </p>
 <p align="center">
-  <i>Fig. 20 - Mensagem de sucesso na clonagem do TPDV</i>
+  <i>Fig. 21 - Mensagem de sucesso na clonagem do TPDV</i>
 </p>
 
 Criando um novo ficheiro TPDV com o mesmo conteúdo do ficheiro original. No momento, o utilizador pode apenas listar os ficheiros presentes no TPDV clonado.
 
 <p align="center">
-  <img src="img/teste_clone3.png" alt="Clonagem do TPDV" width="900"/>
+  <img src="img/teste_clone3.png" alt="Autenticação do Clone do TPDV" width="400"/>
 </p>
 <p align="center">
-  <i>Fig. 21 - Listagem de ficheiros do TPDV clonado</i>
+  <i>Fig. 22 - Autenticação do Clone do TPDV</i>
+</p>
+
+<p align="center">
+  <img src="img/teste_clone4.png" alt="Listagem de ficheiros do TPDV clonado" width="600"/>
+</p>
+<p align="center">
+  <i>Fig. 23 - Listagem de ficheiros do TPDV clonado</i>
 </p>
 
 ## Documentação
@@ -400,8 +414,13 @@ $ ./app
 
 ## Conclusão
 
-> [!NOTE] 
-> Not chatgpt shit, falar realmente que objetivos atingimos, como foi a experiencia, o que aprendemos e o que podiamos ter melhorado (ou será melhorado nos próximos trabalhos), seja a nível de organizacional, ou a nível técnico.
+Em conclusão, conseguimos implementar com sucesso o TPDV utilizando Intel SGX enclaves, garantindo assim um ambiente seguro para armazenamento e manipulação de arquivos. Ao longo do desenvolvimento, enfrentamos desafios significativos, especialmente na definição das funcionalidades críticas a serem executadas dentro dos enclaves. No entanto, superamos esses obstáculos e conseguimos finalizar todos os objetivos estabelecidos.
+
+Durante os testes realizados, o TPDV demonstrou a sua eficácia ao detectar falhas de integridade, listar e extrair arquivos, realizar alterações de credenciais e validar a integridade dos arquivos armazenados, tudo sem comprometer a segurança dos dados. Além disso, foram feitos esforços para melhorar o desempenho da aplicação.
+
+Esta experiência foi extremamente enriquecedora, proporcionando conhecimentos valiosos sobre o desenvolvimento de *software* utilizando segurança a nível de *hardware* e sobre o desenvolvimento de aplicações com foco na integridade. 
+
+O êxito na implementação do TPDV não apenas ressalta a importância da integridade dos dados em ambientes digitais, mas também destaca o potencial das tecnologias como Intel SGX enclaves na proteção desses dados.
 
 ## Referências
 
