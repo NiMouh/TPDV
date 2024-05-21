@@ -1,4 +1,4 @@
-# Trabalho prático 1 de Ambientes de Execução Seguros
+# *Tamper Proof Data Vault* (TPDV)
 
 ## Autores
 - João Almeida (118340)
@@ -6,7 +6,7 @@
 
 ## Objetivos
 
-Implementar um cofre digital à **prova de adulteração de arquivos** (TPDV), utilizando **Intel SGX enclaves**. O cofre pode ser destruído, mas nunca vai ser possível mudar o conteúdo dos arquivos sem que o cofre perceba. O foco desta implementação é a **integridade** dos arquivos, **não a confidencialidade**.
+Implementar um cofre digital, utilizando **Intel SGX enclaves**. O cofre pode ser destruído, mas nunca vai ser possível mudar o conteúdo dos arquivos sem que o cofre perceba. O foco desta implementação é a **integridade** dos arquivos, **não a confidencialidade**.
 
 O programa deve ser capaz de:
 - [x] Criar um ficheiro TPDV.
